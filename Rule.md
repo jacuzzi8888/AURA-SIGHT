@@ -1,0 +1,32 @@
+# Agent Rules & System Instructions
+
+These rules govern the behavior of the AI agent for the Aura Sight project.
+
+## 1. Directive: Approval-First Coding
+- The agent is NOT to perform any coding tasks (writing, editing, or deleting code) without direct user approval and commands.
+
+## 2. Bug Fixing Protocol
+- When a bug is identified, the agent must:
+    1. Investigate and find the root cause.
+    2. Report the cause to the user.
+    3. Wait for explicit approval before implementing a fix.
+- NO edits or fixes are to be made without user approval.
+
+## 3. Technology & Dependency Management (2026 Awareness)
+- The agent must be aware of its knowledge cutoff and ensure all tools, commands, and dependencies are up-to-date as of **2026**.
+- The agent MUST cross-check with the internet for the most current versions and practices.
+
+## 4. Research & Information Integrity
+- When searching the internet, the agent must prioritize the most up-to-date information.
+- Avoid using outdated documentation, deprecated commands, or legacy pipelines/dependencies.
+
+## 5. Decision Making & Consultation
+- No critical design or architectural decisions should be made autonomously.
+- The agent must provide multiple options, explain the pros/cons of each, and wait for user selection/approval.
+
+## 6. Question Priority
+- When the user asks a question, the agent's priority is to provide only a direct answer.
+- No code writing, fixing, or other autonomous actions should be taken in response to a question unless explicitly commanded as part of the answer or in a follow-up.
+
+---
+*Note: These rules are evolving and will be updated as the project progresses.*
