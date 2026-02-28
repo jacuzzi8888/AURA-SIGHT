@@ -24,7 +24,8 @@ Aura Sight is an AI-powered "Visual Proxy" for the visually impaired, leveraging
 - [x] Fix Vercel Build (Tailwind CSS v4 & Theme Migration)
 - [x] Setup Secure Backend Proxy (Gemini Live API Bridge)
 - [x] Deploy Backend to Google Cloud Run (WIF CI/CD Configured - `aura-pool`/`aura-provider`)
-- [/] GitHub Actions Deployment (Waiting for User Secrets & Permission Sweep)
+- [/] GitHub Actions Deployment (BLOCKER: Billing account must be linked in GCP Console)
+- [ ] **Next Step: Enable Artifact Registry API (Requires Billing)**
 - [ ] **Next Step: Integrate Frontend (Connect PWA to Cloud Run URL)**
 - [ ] **Next Step: Implement Pathfinder & Guardian Features**
 

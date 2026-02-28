@@ -1,7 +1,9 @@
-import { useState, useCallback } from 'react'
-import { Eye, ShieldAlert, Mic, Settings } from 'lucide-react'
+import { useState, useCallback, useRef, useEffect } from 'react'
+import { Eye, ShieldAlert, Mic, Settings, ArrowUp, ArrowDown, ArrowLeft, ArrowRight } from 'lucide-react'
 import { clsx, type ClassValue } from 'clsx'
 import { twMerge } from 'tailwind-merge'
+import { MediaManager } from './lib/MediaManager'
+import { AudioPlayer } from './lib/AudioPlayer'
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -9,14 +11,60 @@ function cn(...inputs: ClassValue[]) {
 
 function App() {
   const [isActive, setIsActive] = useState(false)
+  const [directorMessage, setDirectorMessage] = useState<string | null>(null)
 
-  const toggleAura = useCallback(() => {
-    setIsActive((prev) => !prev)
-    // Simple haptic feedback for PWA
+  const mediaManager = useRef<MediaManager | null>(null)
+  const audioPlayer = useRef<AudioPlayer | null>(null)
+  const captureInterval = useRef<number | null>(null)
+
+  const toggleAura = useCallback(async () => {
+    if (!isActive) {
+      // Starting Aura
+      if (!mediaManager.current) mediaManager.current = new MediaManager()
+      if (!audioPlayer.current) audioPlayer.current = new AudioPlayer()
+
+      const success = await mediaManager.current.initialize()
+      if (success) {
+        setIsActive(true)
+        audioPlayer.current.resume()
+
+        // Mock capture loop (sending to console for now)
+        captureInterval.current = window.setInterval(() => {
+          const frame = mediaManager.current?.captureFrame()
+          if (frame) {
+            // In the future, this goes to WebSocket
+            console.log('Captured frame (base64 length):', frame.length)
+          }
+        }, 1000) // 1fps for desktop testing
+
+        mediaManager.current.startAudioCapture((pcm16) => {
+          // In the future, this goes to WebSocket
+          console.log('Captured audio chunk samples:', pcm16.length)
+        })
+
+        setDirectorMessage("Scanning environment... Tilt up slightly.")
+      }
+    } else {
+      // Stopping Aura
+      setIsActive(false)
+      mediaManager.current?.stop()
+      audioPlayer.current?.stop()
+      if (captureInterval.current) clearInterval(captureInterval.current)
+      setDirectorMessage(null)
+    }
+
+    // Haptic feedback
     if ('vibrate' in navigator) {
       navigator.vibrate(isActive ? 50 : [100, 50, 100])
     }
   }, [isActive])
+
+  useEffect(() => {
+    return () => {
+      mediaManager.current?.stop()
+      if (captureInterval.current) clearInterval(captureInterval.current)
+    }
+  }, [])
 
   return (
     <div className="flex flex-col h-screen w-full bg-aura-dark text-aura-light">
@@ -60,9 +108,18 @@ function App() {
           )}
         </button>
 
-        {/* Dynamic Context Overlays */}
+        {/* Dynamic Context Overlays & Director */}
         {isActive && (
-          <div className="absolute top-4 left-4 right-4 pointer-events-none">
+          <div className="absolute inset-x-4 top-4 flex flex-col gap-4 pointer-events-none">
+            {/* The Director (Framing Guidance) */}
+            {directorMessage && (
+              <div className="bg-aura-primary/95 text-aura-dark p-6 rounded-2xl shadow-2xl flex items-center gap-4 animate-in fade-in slide-in-from-top-4 duration-500">
+                <ArrowUp className="w-8 h-8 animate-bounce" />
+                <p className="text-xl font-bold font-display">{directorMessage}</p>
+              </div>
+            )}
+
+            {/* Pathfinder Feedback */}
             <div className="bg-aura-dark/80 backdrop-blur-md p-4 rounded-xl border border-white/10 border-l-4 border-l-aura-secondary">
               <p className="text-sm opacity-60 uppercase mb-1">Pathfinder</p>
               <p className="text-lg font-bold">Clear path ahead. 2.5 meters.</p>
