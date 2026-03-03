@@ -13,6 +13,9 @@
   /* Pure High-Contrast White */
 
   --font-sans: "Inter", "system-ui", sans-serif;
+
+  --animate-spin-slow: spin 20s linear infinite;
+  --animate-spin-reverse-slow: spin 30s linear infinite reverse;
 }
 
 

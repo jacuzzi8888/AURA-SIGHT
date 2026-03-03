@@ -76,9 +76,15 @@ function App() {
   }, [])
 
   return (
-    <div className="flex flex-col h-[100dvh] w-full bg-aura-dark text-aura-light overflow-hidden">
+    <div className="flex flex-col h-[100dvh] w-full bg-aura-dark text-aura-light overflow-hidden relative">
+      {/* Dynamic Backgrounds */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none z-0">
+        <div className="absolute w-[200vw] h-[200vh] -top-[50vh] -left-[50vw] bg-[radial-gradient(ellipse_at_center,rgba(19,127,236,0.03)_0%,transparent_50%)] animate-spin-slow" />
+        <div className="absolute w-[150vw] h-[150vh] -top-[25vh] -left-[25vw] bg-[radial-gradient(ellipse_at_center,rgba(112,0,255,0.03)_0%,transparent_50%)] animate-spin-reverse-slow" />
+      </div>
+
       {/* Dynamic Main Content Area */}
-      <main className="flex-1 relative w-full h-full overflow-hidden">
+      <main className="flex-1 relative w-full h-full overflow-hidden z-10">
         {activeView === 'nexus' && (
           <>
             {/* Header Layer (Only in Nexus Standby/Scanning) */}

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { ArrowUp } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -20,8 +20,58 @@ export const Nexus: React.FC<NexusProps> = ({
     onToggle,
     className = '',
 }) => {
-    // Simple mock extraction for the "arrow" word.
     const shortMessage = directorMessage?.split(" ").slice(-1)[0].replace(".", "") || "UP";
+    const [isPressing, setIsPressing] = useState(false);
+    const [pressProgress, setPressProgress] = useState(0);
+    const pressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const pressFrameRef = useRef<number | null>(null);
+
+    const startPress = () => {
+        if (isActive) {
+            onToggle(); // Tap to stop if already active
+            return;
+        }
+
+        setIsPressing(true);
+        setPressProgress(0);
+
+        let startTime = Date.now();
+        const duration = 800; // ms to hold
+
+        const animate = () => {
+            const elapsed = Date.now() - startTime;
+            const progress = Math.min(elapsed / duration, 1);
+            setPressProgress(progress);
+
+            if (progress < 1) {
+                pressFrameRef.current = requestAnimationFrame(animate);
+            }
+        };
+        pressFrameRef.current = requestAnimationFrame(animate);
+
+        pressTimerRef.current = setTimeout(() => {
+            if ('vibrate' in navigator) navigator.vibrate(50);
+            onToggle();
+            setIsPressing(false);
+            setPressProgress(0);
+        }, duration);
+    };
+
+    const cancelPress = () => {
+        if (!isActive) {
+            setIsPressing(false);
+            setPressProgress(0);
+            if (pressTimerRef.current) clearTimeout(pressTimerRef.current);
+            if (pressFrameRef.current) cancelAnimationFrame(pressFrameRef.current);
+        }
+    };
+
+    useEffect(() => {
+        return () => {
+            if (pressTimerRef.current) clearTimeout(pressTimerRef.current);
+            if (pressFrameRef.current) cancelAnimationFrame(pressFrameRef.current);
+        };
+    }, []);
 
     return (
         <div className={cn("relative flex h-full w-full flex-col overflow-hidden items-center justify-center", className)}>
@@ -42,33 +92,66 @@ export const Nexus: React.FC<NexusProps> = ({
 
             {/* The Ring Interactor */}
             <button
-                onPointerDown={onToggle}
-                className="relative z-10 flex items-center justify-center w-[220px] h-[220px] rounded-full border border-white/40 focus:outline-none active:scale-95 transition-transform duration-300"
+                onPointerDown={startPress}
+                onPointerUp={cancelPress}
+                onPointerLeave={cancelPress}
+                onContextMenu={(e) => e.preventDefault()}
+                className="relative z-10 flex items-center justify-center w-[220px] h-[220px] rounded-full border border-white/40 focus:outline-none transition-transform duration-300"
+                style={{ transform: isPressing ? 'scale(0.95)' : 'scale(1)' }}
                 aria-label={isActive ? "Stop Scanning" : "Long press to scan"}
             >
+                {/* Progress Ring visual when holding */}
+                {!isActive && isPressing && (
+                    <div
+                        className="absolute inset-0 rounded-full"
+                        style={{
+                            background: `conic-gradient(var(--color-aura-primary) ${pressProgress * 360}deg, transparent 0deg)`,
+                            maskImage: 'radial-gradient(transparent 65%, black 66%)',
+                            WebkitMaskImage: 'radial-gradient(transparent 65%, black 66%)'
+                        }}
+                    />
+                )}
+
                 <div
                     className={cn(
-                        "w-[200px] h-[200px] rounded-full transition-all duration-500 flex items-center justify-center",
+                        "w-[200px] h-[200px] rounded-full transition-all duration-500 flex items-center justify-center overflow-hidden",
                         isActive
                             ? "bg-aura-primary scale-100 border-none shadow-[0_0_80px_rgba(19,127,236,0.6)] animate-pulse"
                             : "bg-transparent border-2 border-white/90 scale-95"
                     )}
-                />
+                >
+                    {/* Voice Waveform when active */}
+                    {isActive && (
+                        <div className="flex items-center justify-center gap-1.5 h-16 w-full">
+                            {[0.8, 0.4, 1, 0.6, 0.9].map((scale, i) => (
+                                <div
+                                    key={i}
+                                    className="w-2 bg-white rounded-full animate-pulse"
+                                    style={{
+                                        height: `${scale * 100}%`,
+                                        animationDelay: `${i * 0.15}s`,
+                                        animationDuration: '0.8s'
+                                    }}
+                                />
+                            ))}
+                        </div>
+                    )}
+                </div>
             </button>
 
             {/* Instructions */}
             {!isActive && (
-                <div className="absolute bottom-32 text-center z-10 animate-in fade-in duration-500">
+                <div className={cn("absolute bottom-32 text-center z-10 transition-opacity duration-300", isPressing ? "opacity-0" : "opacity-100")}>
                     <p className="text-white text-xl font-medium tracking-tight opacity-90">Long press to scan</p>
-                    <p className="text-slate-500 text-xs font-bold tracking-[0.2em] uppercase mt-3">The Nexus Standby</p>
+                    <p className="text-slate-300 text-xs font-bold tracking-[0.2em] uppercase mt-3">The Nexus Standby</p>
                 </div>
             )}
 
             {/* Pathfinder Sub-Label (Optional during Active) */}
             {isActive && (
-                <div className="absolute bottom-32 text-center z-10 animate-in slide-in-from-bottom flex flex-col items-center gap-1">
-                    <span className="text-aura-primary text-xs font-bold uppercase tracking-widest bg-aura-primary/10 px-3 py-1 rounded-full">Scanning</span>
-                    <p className="text-white text-lg font-medium">{directorMessage}</p>
+                <div className="absolute bottom-32 text-center z-10 animate-in slide-in-from-bottom flex flex-col items-center gap-1 w-3/4 max-w-sm">
+                    <span className="text-aura-primary text-xs font-bold uppercase tracking-widest bg-aura-primary/10 px-3 py-1 rounded-full border border-aura-primary/30">Scanning</span>
+                    <p className="text-white text-lg font-medium tracking-wide mt-2">{directorMessage}</p>
                 </div>
             )}
         </div>

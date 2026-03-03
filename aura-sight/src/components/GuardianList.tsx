@@ -45,7 +45,7 @@ export const GuardianList: React.FC<GuardianListProps> = ({ alerts, className = 
                         <div className="flex justify-end">
                             <span className={cn(
                                 "text-sm font-bold uppercase tracking-[0.2em]",
-                                alert.type === 'critical' ? "text-aura-warning" : "text-aura-dark/60"
+                                alert.type === 'critical' ? "text-aura-warning" : "text-aura-dark/80"
                             )}>{alert.timestamp}</span>
                         </div>
                     </button>
