@@ -27,6 +27,7 @@ export const Nexus: React.FC<NexusProps> = ({
     const pressFrameRef = useRef<number | null>(null);
 
     const startPress = () => {
+        console.log("startPress triggered, isActive:", isActive);
         if (isActive) {
             onToggle(); // Tap to stop if already active
             return;
@@ -49,8 +50,10 @@ export const Nexus: React.FC<NexusProps> = ({
         };
         pressFrameRef.current = requestAnimationFrame(animate);
 
+        console.log("Nexus hold timer scheduled for", duration, "ms");
         pressTimerRef.current = setTimeout(() => {
             if ('vibrate' in navigator) navigator.vibrate(50);
+            console.log("Nexus hold duration REACHED. Calling onToggle now...");
             onToggle();
             setIsPressing(false);
             setPressProgress(0);
@@ -59,6 +62,7 @@ export const Nexus: React.FC<NexusProps> = ({
 
     const cancelPress = () => {
         if (!isActive) {
+            console.log("cancelPress triggered, clearing timer");
             setIsPressing(false);
             setPressProgress(0);
             if (pressTimerRef.current) clearTimeout(pressTimerRef.current);

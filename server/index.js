@@ -15,7 +15,7 @@ app.get('/health', (req, res) => {
 });
 
 const PORT = process.env.PORT || 8080;
-const secretClient = new SecretManagerServiceClient();
+let secretClient = null;
 
 /**
  * Retrieves the Gemini API Key from environment or Google Cloud Secret Manager.
@@ -24,13 +24,16 @@ async function getApiKey() {
     if (process.env.GEMINI_API_KEY) return process.env.GEMINI_API_KEY;
 
     try {
+        if (!secretClient) {
+            secretClient = new SecretManagerServiceClient();
+        }
         const project = process.env.GOOGLE_CLOUD_PROJECT || 'aura-sight';
         const [version] = await secretClient.accessSecretVersion({
             name: `projects/${project}/secrets/GEMINI_API_KEY/versions/latest`,
         });
         return version.payload.data.toString();
     } catch (err) {
-        console.warn("Secret Manager access failed or not configured. Ensure GOOGLE_CLOUD_PROJECT is set.");
+        console.warn("Secret Manager access failed (missing ADC or project config). Please set GEMINI_API_KEY in .env for local dev.");
         return null;
     }
 }

@@ -5,6 +5,7 @@ import { twMerge } from 'tailwind-merge'
 
 import { MediaManager } from './lib/MediaManager'
 import { AudioPlayer } from './lib/AudioPlayer'
+import { LiveAPIClient } from './lib/LiveAPIClient'
 
 import { Nexus } from './components/Nexus'
 import { GuardianList } from './components/GuardianList'
@@ -26,38 +27,62 @@ function App() {
 
   const mediaManager = useRef<MediaManager | null>(null)
   const audioPlayer = useRef<AudioPlayer | null>(null)
+  const apiClient = useRef<LiveAPIClient | null>(null)
   const captureInterval = useRef<number | null>(null)
 
   const toggleAura = useCallback(async () => {
+    console.log("toggleAura called, isActive:", isActive);
     if (!isActive) {
       // Starting Aura
       if (!mediaManager.current) mediaManager.current = new MediaManager()
       if (!audioPlayer.current) audioPlayer.current = new AudioPlayer()
+      if (!apiClient.current) apiClient.current = new LiveAPIClient()
 
+      console.log("Initializing media...");
       const success = await mediaManager.current.initialize()
+      console.log("Media initialization success:", success);
       if (success) {
         setIsActive(true)
-        audioPlayer.current.resume()
+        await audioPlayer.current.resume()
 
-        // Mock capture loop (sending to console for now)
-        captureInterval.current = window.setInterval(() => {
-          const frame = mediaManager.current?.captureFrame()
-          if (frame) {
-            console.log('Captured frame (base64 length):', frame.length)
-          }
-        }, 1000)
+        try {
+          // Setup WebSocket Client listeners
+          apiClient.current!.onContent((text) => {
+            setDirectorMessage(text)
+          })
 
-        mediaManager.current.startAudioCapture((pcm16) => {
-          console.log('Captured audio chunk samples:', pcm16.length)
-        })
+          apiClient.current!.onAudio((pcm16) => {
+            audioPlayer.current?.queueAudio(pcm16)
+          })
 
-        setDirectorMessage("Scanning environment... Tilt up slightly.")
+          await apiClient.current!.connect()
+
+          // Start Capture Loop
+          captureInterval.current = window.setInterval(() => {
+            const frame = mediaManager.current?.captureFrame()
+            if (frame && apiClient.current) {
+              apiClient.current.sendVideoFrame(frame)
+            }
+          }, 1000)
+
+          mediaManager.current.startAudioCapture((pcm16) => {
+            apiClient.current?.sendAudioChunk(pcm16)
+          })
+
+          setDirectorMessage("Scanning environment...")
+        } catch (err) {
+          console.error("Failed to start Aura session:", err)
+          setIsActive(false)
+          setDirectorMessage("Session Error")
+          mediaManager.current?.stop()
+        }
       }
     } else {
       // Stopping Aura
       setIsActive(false)
       mediaManager.current?.stop()
       audioPlayer.current?.stop()
+      apiClient.current?.disconnect()
       if (captureInterval.current) clearInterval(captureInterval.current)
       setDirectorMessage(null)
     }
