@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
-import { Eye, ShieldAlert, Settings, Smile } from 'lucide-react'
+import { Eye, Settings } from 'lucide-react'
 import { clsx, type ClassValue } from 'clsx'
 import { twMerge } from 'tailwind-merge'
 
@@ -8,17 +8,13 @@ import { AudioPlayer } from './lib/AudioPlayer'
 import { LiveAPIClient } from './lib/LiveAPIClient'
 
 import { Nexus } from './components/Nexus'
-import { GuardianList } from './components/GuardianList'
-import type { GuardianAlert } from './components/GuardianList'
-import { SocialMirror } from './components/SocialMirror'
 import { SettingsPanel } from './components/SettingsPanel'
-import { mockGuardianAlerts, mockSocialData } from './data/mockData'
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
-type ViewMode = 'nexus' | 'guardian' | 'social' | 'settings'
+type ViewMode = 'nexus' | 'settings'
 
 function App() {
   const [activeView, setActiveView] = useState<ViewMode>('nexus')
@@ -69,7 +65,21 @@ function App() {
             apiClient.current?.sendAudioChunk(pcm16)
           })
 
-          setDirectorMessage("Scanning environment...")
+          // Play Start Chime
+          const ctx = new AudioContext();
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(880, ctx.currentTime);
+          osc.frequency.exponentialRampToValueAtTime(440, ctx.currentTime + 0.5);
+          gain.gain.setValueAtTime(0.1, ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start();
+          osc.stop(ctx.currentTime + 0.5);
+
+          setDirectorMessage("Listening...")
         } catch (err) {
           console.error("Failed to start Aura session:", err)
           setIsActive(false)
@@ -139,44 +149,26 @@ function App() {
           </>
         )}
 
-        {activeView === 'guardian' && (
-          <GuardianList alerts={mockGuardianAlerts as GuardianAlert[]} />
-        )}
-
-        {activeView === 'social' && (
-          <SocialMirror data={isActive || true ? mockSocialData : null} />
-        )}
 
         {activeView === 'settings' && (
           <SettingsPanel onClose={() => setActiveView('nexus')} />
         )}
       </main>
 
-      {/* Persistent Bottom Nav (Hidden if in settings) */}
+      {/* Persistent Bottom Nav (Simplified) */}
       {activeView !== 'settings' && (
-        <nav className="relative z-30 flex justify-around items-center px-6 py-8 bg-aura-dark border-t border-white/10">
-          <button
-            onClick={() => setActiveView('guardian')}
-            className={cn("flex flex-col items-center gap-2 transition-colors", activeView === 'guardian' ? "text-white" : "text-white/40")}
-          >
-            <ShieldAlert className="w-8 h-8" />
-            <span className="text-[10px] font-bold uppercase tracking-widest">Alerts</span>
-          </button>
-
+        <nav className="relative z-30 flex justify-center items-center px-6 py-8 bg-aura-dark border-t border-white/10">
           <button
             onClick={() => setActiveView('nexus')}
-            className={cn("flex flex-col items-center gap-2 transition-colors", activeView === 'nexus' ? "text-aura-primary" : "text-white/40")}
+            className={cn(
+              "flex flex-col items-center gap-2 transition-all duration-500 px-10 py-2 rounded-full",
+              isActive ? "text-aura-primary scale-110" : "text-white/40 hover:text-white/60"
+            )}
           >
-            <Eye className="w-10 h-10" />
-            <span className="text-[10px] flex items-center justify-center font-bold uppercase tracking-widest mt-1">Scan</span>
-          </button>
-
-          <button
-            onClick={() => setActiveView('social')}
-            className={cn("flex flex-col items-center gap-2 transition-colors", activeView === 'social' ? "text-aura-social" : "text-white/40")}
-          >
-            <Smile className="w-8 h-8" />
-            <span className="text-[10px] font-bold uppercase tracking-widest">Social</span>
+            <Eye className={cn("w-10 h-10 transition-transform duration-500", isActive && "animate-pulse")} />
+            <span className="text-[10px] font-bold uppercase tracking-[0.3em] mt-1">
+              {isActive ? 'Aura Active' : 'Hold to Scan'}
+            </span>
           </button>
         </nav>
       )}

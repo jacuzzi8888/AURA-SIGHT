@@ -86,10 +86,9 @@ export const Nexus: React.FC<NexusProps> = ({
 
             {/* The Director */}
             {isActive && directorMessage && (
-                <div className="absolute top-16 flex flex-col items-center gap-2 z-20 animate-in slide-in-from-top-4 duration-500">
-                    <ArrowUp className="w-20 h-20 text-white animate-bounce" />
-                    <h1 className="text-white text-4xl font-bold font-sans tracking-tight uppercase">
-                        {shortMessage}
+                <div className="absolute top-16 px-10 text-center z-20 animate-in fade-in slide-in-from-top-4 duration-500">
+                    <h1 className="text-white text-3xl font-bold font-sans tracking-tight uppercase leading-tight drop-shadow-[0_2px_10px_rgba(0,0,0,0.5)]">
+                        {directorMessage.length > 20 ? directorMessage.substring(0, 20) + "..." : directorMessage}
                     </h1>
                 </div>
             )}
@@ -146,8 +145,8 @@ export const Nexus: React.FC<NexusProps> = ({
             {/* Instructions */}
             {!isActive && (
                 <div className={cn("absolute bottom-32 text-center z-10 transition-opacity duration-300", isPressing ? "opacity-0" : "opacity-100")}>
-                    <p className="text-white text-xl font-medium tracking-tight opacity-90">Long press to scan</p>
-                    <p className="text-slate-300 text-xs font-bold tracking-[0.2em] uppercase mt-3">The Nexus Standby</p>
+                    <p className="text-white text-xl font-medium tracking-tight opacity-90 px-8">Tap and hold to talk to Aura</p>
+                    <p className="text-slate-300 text-[10px] font-bold tracking-[0.3em] uppercase mt-3 opacity-60">Unified Intelligence Standby</p>
                 </div>
             )}
 
