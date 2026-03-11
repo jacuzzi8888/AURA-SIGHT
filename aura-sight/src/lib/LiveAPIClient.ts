@@ -35,24 +35,29 @@ export class LiveAPIClient {
 
             this.ws.onopen = () => {
                 console.log('LiveAPIClient: Connected to Aura Proxy');
-                this.isConnected = true;
 
-                // Initial Setup Message for Gemini
-                const setupMessage = {
-                    setup: {
-                        model: "projects/ocellus-488718/locations/us-central1/models/gemini-live-2.5-flash-native-audio",
-                        generation_config: {
-                            response_modalities: ["audio", "text"],
-                        },
-                        system_instruction: {
-                            parts: [{
-                                text: `You are Aura Sight, a frontier-class multisensory AI companion for the visually impaired. You see through the user's camera and hear their voice in real-time.
+                const sendSetup = () => {
+                    if (this.ws?.readyState === WebSocket.OPEN) {
+                        this.isConnected = true;
+                        // Initial Setup Message for Gemini
+                        const setupMessage = {
+                            setup: {
+                                model: "projects/ocellus-488718/locations/us-central1/models/gemini-live-2.5-flash-native-audio",
+                                generation_config: {
+                                    response_modalities: ["audio", "text"],
+                                },
+                                system_instruction: {
+                                    parts: [{
+                                        text: `You are Aura Sight, a frontier-class multisensory AI companion for the visually impaired. You see through the user's camera and hear their voice in real-time.
 
 CORE IDENTITY:
 You are not a tool. You are a trusted companion—calm, warm, and precise. 
 
 MODALITY:
 You are operating as a native audio/vision "Live" agent. Your responses are generated as raw audio for sub-second latency.
+
+SETTING:
+You are assisting a user in their daily life. You should be proactive but not intrusive.
 
 RESPONSE RULES:
 1. Be ultra-concise. Default to under 12 words unless the user explicitly asks for detail.
@@ -68,12 +73,21 @@ PRIORITY ORDER (NEVER violate):
 PROACTIVE BEHAVIORS:
 - If you detect a hazard the user hasn't asked about, interrupt immediately: "Careful—there's a step down right in front of you."
 - If the image is blurry, say: "Hold steady for a moment."`
-                            }]
-                        }
+                                    }]
+                                }
+                            }
+                        };
+                        this.ws.send(JSON.stringify(setupMessage));
+                        resolve();
+                    } else if (this.ws?.readyState === WebSocket.CONNECTING) {
+                        console.warn("WebSocket still CONNECTING in onopen. Retrying in 50ms...");
+                        setTimeout(sendSetup, 50);
+                    } else {
+                        reject(new Error("WebSocket closed before setup could be sent"));
                     }
                 };
-                this.ws?.send(JSON.stringify(setupMessage));
-                resolve();
+
+                sendSetup();
             };
 
             this.ws.onmessage = async (event) => {
