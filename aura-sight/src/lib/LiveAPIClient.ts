@@ -119,23 +119,25 @@ PROACTIVE BEHAVIORS:
      * Handles incoming messages from the Gemini Live API.
      */
     private async handleServerMessage(message: any) {
-        // Handle Setup Complete
-        if (message.setupComplete) {
+        // Handle Setup Complete (Resilient to casing)
+        if (message.setupComplete || message.setup_complete) {
             console.log('Gemini Live Session Initialized');
             return;
         }
 
-        // Handle Server Content (Text and Audio)
-        if (message.serverContent) {
-            const modelTurn = message.serverContent.modelTurn;
+        // Handle Server Content (Resilient to casing)
+        const serverContent = message.serverContent || message.server_content;
+        if (serverContent) {
+            const modelTurn = serverContent.modelTurn || serverContent.model_turn;
             if (modelTurn && modelTurn.parts) {
                 for (const part of modelTurn.parts) {
                     if (part.text) {
                         this.onContentHandler(part.text);
                     }
-                    if (part.inlineData && (part.inlineData.mimeType === 'AUDIO' || part.inlineData.mimeType === 'audio/pcm;rate=16000')) {
+                    const inlineData = part.inlineData || part.inline_data;
+                    if (inlineData && (inlineData.mimeType === 'AUDIO' || inlineData.mimeType === 'audio/pcm;rate=16000' || inlineData.mime_type === 'AUDIO')) {
                         // Convert base64 audio to Int16Array
-                        const binaryString = atob(part.inlineData.data);
+                        const binaryString = atob(inlineData.data);
                         const len = binaryString.length;
                         const bytes = new Uint8Array(len);
                         for (let i = 0; i < len; i++) {
@@ -148,10 +150,9 @@ PROACTIVE BEHAVIORS:
             }
         }
 
-        // Handle Interruption (Barge-in)
+        // Handle Interruption (Resilient to casing)
         if (message.interrupted) {
             console.log('Gemini interrupted. Clearing local audio queue.');
-            // TODO: Signal to AudioPlayer to clear queue
         }
     }
 
