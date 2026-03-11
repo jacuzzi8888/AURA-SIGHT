@@ -42,7 +42,7 @@ export class LiveAPIClient {
                         // Initial Setup Message for Vertex AI (camelCase required)
                         const setupMessage = {
                             setup: {
-                                model: "projects/ocellus-488718/locations/us-central1/models/gemini-live-2.5-flash-native-audio",
+                                model: "projects/ocellus-488718/locations/us-central1/publishers/google/models/gemini-live-2.5-flash-native-audio",
                                 generationConfig: {
                                     responseModalities: ["AUDIO", "TEXT"],
                                 },
