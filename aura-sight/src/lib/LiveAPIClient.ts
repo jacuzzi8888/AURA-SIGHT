@@ -40,7 +40,7 @@ export class LiveAPIClient {
                 // Initial Setup Message for Gemini
                 const setupMessage = {
                     setup: {
-                        model: "models/gemini-live-2.5-flash-native-audio",
+                        model: "models/gemini-2.0-flash-exp",
                         generation_config: {
                             response_modalities: ["audio", "text"],
                         },

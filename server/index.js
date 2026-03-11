@@ -9,9 +9,9 @@ dotenv.config();
 const app = express();
 app.use(cors());
 
-// Basic Health Check for Cloud Run
+// Health check
 app.get('/health', (req, res) => {
-    res.status(200).send('Aura Proxy is healthy.');
+    res.json({ status: 'Aura Proxy is breathing', timestamp: new Date().toISOString() });
 });
 
 const PORT = process.env.PORT || 8080;
@@ -27,7 +27,7 @@ async function getApiKey() {
         if (!secretClient) {
             secretClient = new SecretManagerServiceClient();
         }
-        const project = process.env.GOOGLE_CLOUD_PROJECT || 'aura-sight';
+        const project = process.env.GOOGLE_CLOUD_PROJECT || 'ocellus-488718';
         const [version] = await secretClient.accessSecretVersion({
             name: `projects/${project}/secrets/GEMINI_API_KEY/versions/latest`,
         });
@@ -56,8 +56,8 @@ wss.on('connection', async (ws, req) => {
     }
 
     // The Multimodal Live API endpoint for Gemini
-    // Note: v1beta is the active preview standard for BidiGenerateContent as of March 2026.
-    const googleUrl = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=${apiKey}`;
+    // Note: v1alpha remains the most stable for experimental BidiGenerateContent as of March 2026.
+    const googleUrl = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent?key=${apiKey}`;
 
     const googleWs = new WebSocket(googleUrl);
 
