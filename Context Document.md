@@ -2,7 +2,7 @@
 
 ## **1. Technical Stack**
 
-*   **AI Model**: `gemini-3.1-flash-lite-preview` (Gemini Multimodal Live API).
+*   **AI Model**: `gemini-2.5-flash-live-preview` (Gemini Multimodal Live API).
 *   **Audio Engine**: `Earcon.ts` (Synthesized Web Audio) + `AudioPlayer.ts` (PCM16 chunks).
 *   **Interaction Logic**: `AuraStatus` State Machine (idle -> recording -> thinking -> responding).
 *   **Backend**: Node.js/Express WebSocket Proxy (Deployed to **Google Cloud Run**).
