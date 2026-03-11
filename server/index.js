@@ -56,8 +56,8 @@ wss.on('connection', async (ws, req) => {
     }
 
     // The Multimodal Live API endpoint for Gemini
-    // Note: v1alpha is currently the standard for the Live BidiGenerateContent service.
-    const googleUrl = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent?key=${apiKey}`;
+    // Note: v1beta is the active preview standard for BidiGenerateContent as of March 2026.
+    const googleUrl = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=${apiKey}`;
 
     const googleWs = new WebSocket(googleUrl);
 

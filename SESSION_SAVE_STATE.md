@@ -6,8 +6,8 @@
 - **Reliability Fixes**:
   - **Connectivity**: `API_BASE_URL` now auto-detects cloud proxy vs local.
   - **Secrets**: Permission denied error fixed via `roles/secretmanager.secretAccessor` for the Cloud Run service account.
-  - **Stability**: Added a disconnection handler and fixed `InvalidStateError` in `MediaManager.ts`.
-- **Model Migration**: Migrated to `gemini-2.5-flash-live-preview`. (Note: Gemini 3.1 series does not yet support the `bidiGenerateContent` Live API endpoint as of March 2026).
+- **2026 Alignment**: Migrated to `v1beta` endpoint and `gemini-live-2.5-flash-native-audio` following the March 9, 2026 deprecation.
+- **Audio Stack**: Replaced deprecated `ScriptProcessorNode` with high-performance `AudioWorklet` to fix "cuts" and latency.
 
 ## 🛠️ Technical Details
 - **Proxy**: `wss://aura-proxy-432140310963.us-central1.run.app`

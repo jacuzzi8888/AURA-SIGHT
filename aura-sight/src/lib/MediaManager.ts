@@ -7,7 +7,7 @@ export class MediaManager {
     private videoElement: HTMLVideoElement | null = null;
     private canvas: HTMLCanvasElement | null = null;
     private audioContext: AudioContext | null = null;
-    private processor: ScriptProcessorNode | null = null;
+    private processor: AudioWorkletNode | null = null;
     private onAudioData: ((data: Int16Array) => void) | null = null;
 
     constructor() {
@@ -66,9 +66,9 @@ export class MediaManager {
     }
 
     /**
-     * Starts capturing audio and converts it to PCM16 16kHz.
+     * Starts capturing audio and converts it to PCM16 16kHz using AudioWorklet.
      */
-    startAudioCapture(callback: (data: Int16Array) => void) {
+    async startAudioCapture(callback: (data: Int16Array) => void) {
         if (!this.stream) return;
 
         this.onAudioData = callback;
@@ -76,21 +76,17 @@ export class MediaManager {
             sampleRate: 16000
         });
 
+        // Load the worklet
+        await this.audioContext.audioWorklet.addModule('/pcm-processor.worklet.js');
+
         const source = this.audioContext.createMediaStreamSource(this.stream);
-        // Using ScriptProcessorNode for simplicity in this POC, though AudioWorklet is better
-        this.processor = this.audioContext.createScriptProcessor(4096, 1, 1);
+        this.processor = new AudioWorkletNode(this.audioContext, 'pcm-processor');
 
         source.connect(this.processor);
         this.processor.connect(this.audioContext.destination);
 
-        this.processor.onaudioprocess = (e) => {
-            const inputData = e.inputBuffer.getChannelData(0);
-            // Convert Float32 to Int16 (PCM16)
-            const pcm16 = new Int16Array(inputData.length);
-            for (let i = 0; i < inputData.length; i++) {
-                const s = Math.max(-1, Math.min(1, inputData[i]));
-                pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
-            }
+        this.processor.port.onmessage = (e) => {
+            const pcm16 = new Int16Array(e.data);
             if (this.onAudioData) this.onAudioData(pcm16);
         };
     }

@@ -1,9 +1,8 @@
 # **Context: Aura Sight Technical Architecture**
 
 ## **1. Technical Stack**
-
-*   **AI Model**: `gemini-2.5-flash-live-preview` (Gemini Multimodal Live API).
-*   **Audio Engine**: `Earcon.ts` (Synthesized Web Audio) + `AudioPlayer.ts` (PCM16 chunks).
+*   **AI Model**: `gemini-live-2.5-flash-native-audio` (Gemini Multimodal Live API via `v1beta`).
+*   **Audio Engine**: `AudioWorklet` (pcm-processor.worklet.js) + `AudioPlayer.ts` (PCM16 chunks).
 *   **Interaction Logic**: `AuraStatus` State Machine (idle -> recording -> thinking -> responding).
 *   **Backend**: Node.js/Express WebSocket Proxy (Deployed to **Google Cloud Run**).
 *   **Frontend**: React + Tailwind CSS (Deployed to **Vercel**).
@@ -32,4 +31,4 @@
 
 *   ✅ **Sentinel Transformation Completed**: Audio, Haptics, and State Machine are 100% integrated.
 *   ✅ **Deployment Reliable**: Cloud Run permissions and Vercel environment detection are fixed.
-*   ✅ **Gemini 3 Flash Active**: The AI is programmed to be proactive and safety-first.
+*   ✅ **Gemini Live 2.5 Active**: The AI is programmed to be proactive and safety-first.
