@@ -40,7 +40,7 @@ export class LiveAPIClient {
                 // Initial Setup Message for Gemini
                 const setupMessage = {
                     setup: {
-                        model: "projects/ocellus-488718/locations/us-central1/publishers/google/models/gemini-2.5-flash-live-native-audio",
+                        model: "projects/ocellus-488718/locations/us-central1/models/gemini-live-2.5-flash-native-audio",
                         generation_config: {
                             response_modalities: ["audio", "text"],
                         },
