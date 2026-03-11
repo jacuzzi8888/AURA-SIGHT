@@ -44,7 +44,7 @@ export class LiveAPIClient {
                             setup: {
                                 model: "projects/ocellus-488718/locations/us-central1/publishers/google/models/gemini-live-2.5-flash-native-audio",
                                 generationConfig: {
-                                    responseModalities: ["AUDIO", "TEXT"],
+                                    responseModalities: ["AUDIO"],
                                 },
                                 systemInstruction: {
                                     parts: [{
