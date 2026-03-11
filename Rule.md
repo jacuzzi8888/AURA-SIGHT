@@ -41,5 +41,9 @@ These rules govern the behavior of the AI agent for the Aura Sight project.
     2. Check the **Service Worker** status in DevTools and instruct the user to **Unregister** it if it's serving a stale version.
     3. Verify if the browser is using a cached **Manifest** or old build artifacts.
 
+## 10. Git Commitment Protocol
+- The agent MUST commit all changes to the repository immediately after a fix or feature implementation is verified.
+- Commit messages should be descriptive and follow the project's context.
+
 ---
 *Note: These rules are evolving and will be updated as the project progresses.*
