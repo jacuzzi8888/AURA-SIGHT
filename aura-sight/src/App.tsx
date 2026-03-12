@@ -135,6 +135,9 @@ function App() {
       apiClient.current.sendVideoFrame(frame)
     }
 
+    // Signal to Gemini that user's turn is complete — triggers response generation
+    apiClient.current?.sendTurnComplete()
+
     // Stop microphone but keep camera alive briefly
     mediaManager.current?.stop()
 

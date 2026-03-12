@@ -204,6 +204,21 @@ PROACTIVE BEHAVIORS:
     }
 
     /**
+     * Signals to Gemini that the user's turn is complete.
+     * This triggers the model to start generating a response.
+     */
+    sendTurnComplete() {
+        if (!this.isConnected || !this.ws) return;
+        const message = {
+            client_content: {
+                turn_complete: true
+            }
+        };
+        this.ws.send(JSON.stringify(message));
+        console.log('LiveAPIClient: Sent turn_complete signal');
+    }
+
+    /**
      * Registers a callback for text content updates.
      */
     onContent(handler: (text: string) => void) {
