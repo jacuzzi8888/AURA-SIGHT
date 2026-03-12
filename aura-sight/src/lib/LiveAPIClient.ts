@@ -163,10 +163,10 @@ PROACTIVE BEHAVIORS:
         if (!this.isConnected || !this.ws) return;
 
         const message = {
-            realtimeInput: {
-                mediaChunks: [
+            realtime_input: {
+                media_chunks: [
                     {
-                        mimeType: "image/jpeg",
+                        mime_type: "image/jpeg",
                         data: base64Frame
                     }
                 ]
@@ -191,10 +191,10 @@ PROACTIVE BEHAVIORS:
         const base64Audio = btoa(binary);
 
         const message = {
-            realtimeInput: {
-                mediaChunks: [
+            realtime_input: {
+                media_chunks: [
                     {
-                        mimeType: "audio/pcm;rate=16000",
+                        mime_type: "audio/pcm;rate=16000",
                         data: base64Audio
                     }
                 ]
