@@ -65,16 +65,16 @@ wss.on('connection', async (ws, req) => {
     });
 
     // Proxy messages from Google back to the Client
-    googleWs.on('message', (data) => {
+    googleWs.on('message', (data, isBinary) => {
         if (ws.readyState === WebSocket.OPEN) {
-            ws.send(data);
+            ws.send(data, { binary: isBinary });
         }
     });
 
     // Proxy messages from the Client to Google
-    ws.on('message', (data) => {
+    ws.on('message', (data, isBinary) => {
         if (googleWs.readyState === WebSocket.OPEN) {
-            googleWs.send(data);
+            googleWs.send(data, { binary: isBinary });
         }
     });
 

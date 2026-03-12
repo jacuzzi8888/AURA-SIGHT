@@ -1,38 +1,34 @@
-import { SecretManagerServiceClient } from '@google-cloud/secret-manager';
+import { GoogleAuth } from 'google-auth-library';
+import fetch from 'node-fetch';
 
-async function listModels(version = 'v1beta') {
-    try {
-        const client = new SecretManagerServiceClient();
-        const project = process.env.GOOGLE_CLOUD_PROJECT || 'aura-sight';
-        const [secretVersion] = await client.accessSecretVersion({
-            name: `projects/${project}/secrets/GEMINI_API_KEY/versions/latest`,
-        });
-        const apiKey = secretVersion.payload.data.toString();
+async function listModels() {
+    const auth = new GoogleAuth({
+        scopes: 'https://www.googleapis.com/auth/cloud-platform',
+    });
+    const client = await auth.getClient();
+    const token = await client.getAccessToken();
 
-        console.log(`--- Available Models (${version}) ---`);
-        const response = await fetch(`https://generativelanguage.googleapis.com/${version}/models?key=${apiKey}`);
-        const data = await response.json();
-
-        if (data.models) {
-            data.models.forEach(m => {
-                const methods = m.supportedGenerationMethods || [];
-                if (methods.includes('bidiGenerateContent')) {
-                    console.log(`[LIVE] ${m.name}`);
-                } else {
-                    console.log(`[STDR] ${m.name}`);
-                }
-            });
-        } else {
-            console.log(`No models found for ${version}:`, data);
+    const projectId = 'ocellus-488718';
+    const location = 'us-central1';
+    
+    // REST API Endpoint to list publishers/google models
+    const url = `https://${location}-aiplatform.googleapis.com/v1beta1/projects/${projectId}/locations/${location}/publishers/google/models`;
+    
+    console.log("Fetching: " + url);
+    const res = await fetch(url, {
+        headers: {
+            'Authorization': `Bearer ${token.token}`
         }
-    } catch (err) {
-        console.error(`Error listing models for ${version}:`, err.message);
+    });
+
+    const data = await res.json();
+    if (data.models) {
+        const liveModels = data.models.filter(m => m.name.includes('live') || m.name.includes('bidi') || m.name.includes('gemini'));
+        console.log("Gemini / Live Models Found:");
+        liveModels.forEach(m => console.log(m.name.split('publishers/google/models/')[1]));
+    } else {
+        console.log("No models array returned:", data);
     }
 }
 
-async function run() {
-    await listModels('v1beta');
-    await listModels('v1beta1');
-}
-
-run();
+listModels().catch(console.error);
