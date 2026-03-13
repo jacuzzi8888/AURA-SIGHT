@@ -83,8 +83,6 @@ function App() {
         setStatus('responding')
         stopHeartbeat()
         audioPlayer.current?.queueAudio(pcm16)
-        // Stop media tracks after first audio response (Gemini is now responding)
-        mediaManager.current?.stop()
       })
 
       // Handle user interruption — immediately clear AI audio
@@ -108,6 +106,8 @@ function App() {
         stopHeartbeat()
         // Clean up media tracks now that the full exchange is done
         mediaManager.current?.stop()
+        // Critically: Disconnect the WebSocket to enforce true privacy between turns
+        apiClient.current?.disconnect()
       })
 
       // Handle reconnection events
