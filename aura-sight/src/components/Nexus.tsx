@@ -13,6 +13,8 @@ export interface NexusProps {
     readonly onStartRecording: () => void;
     readonly onStopRecording: () => void;
     readonly onCancel: () => void;
+    readonly videoStream?: MediaStream | null;
+    readonly cameraEnabled?: boolean;
     readonly className?: string;
 }
 
@@ -22,8 +24,11 @@ export const Nexus: React.FC<NexusProps> = ({
     onStartRecording,
     onStopRecording,
     onCancel,
+    videoStream,
+    cameraEnabled = true,
     className = '',
 }) => {
+    const videoRef = useRef<HTMLVideoElement>(null);
     const [isPressing, setIsPressing] = useState(false);
     const [pressProgress, setPressProgress] = useState(0);
     const pressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -91,6 +96,15 @@ export const Nexus: React.FC<NexusProps> = ({
             if (pressFrameRef.current) cancelAnimationFrame(pressFrameRef.current);
         };
     }, []);
+
+    // ── Bind Video Stream ──
+    useEffect(() => {
+        if (videoRef.current && videoStream) {
+            videoRef.current.srcObject = videoStream;
+        } else if (videoRef.current) {
+            videoRef.current.srcObject = null;
+        }
+    }, [videoStream]);
 
     // ── Status Text ──
     const statusLabel = (() => {
@@ -160,6 +174,17 @@ export const Nexus: React.FC<NexusProps> = ({
                         animation: 'spin 2s linear infinite'
                     } : undefined}
                 >
+                    {/* Live Camera Feed (Masked by rounded-full on parent) */}
+                    {(status === 'recording' || status === 'responding') && videoStream && cameraEnabled && (
+                        <video
+                            ref={videoRef}
+                            autoPlay
+                            playsInline
+                            muted
+                            className="absolute inset-0 w-full h-full object-cover opacity-60 mix-blend-screen pointer-events-none"
+                        />
+                    )}
+
                     {/* Voice Waveform (Recording / Responding) */}
                     {(status === 'recording' || status === 'responding') && (
                         <div className="flex items-center justify-center gap-1.5 h-16 w-full">

@@ -105,6 +105,24 @@ export class MediaManager {
             this.processor.disconnect();
         }
         this.stream = null;
+        this.stream = null;
         this.videoElement = null;
+    }
+
+    /**
+     * Exposes the active MediaStream for the UI to display.
+     */
+    getStream(): MediaStream | null {
+        return this.stream;
+    }
+
+    /**
+     * Toggles the video track securely without destroying the session.
+     */
+    toggleVideo(enable: boolean) {
+        if (!this.stream) return;
+        this.stream.getVideoTracks().forEach(track => {
+            track.enabled = enable;
+        });
     }
 }

@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
-import { Eye, Settings } from 'lucide-react'
+import { Eye, Settings, Video, VideoOff } from 'lucide-react'
 import { clsx, type ClassValue } from 'clsx'
 import { twMerge } from 'tailwind-merge'
 
@@ -27,6 +27,8 @@ function App() {
   const [activeView, setActiveView] = useState<ViewMode>('nexus')
   const [status, setStatus] = useState<AuraStatus>('idle')
   const [directorMessage, setDirectorMessage] = useState<string | null>(null)
+  const [videoStream, setVideoStream] = useState<MediaStream | null>(null)
+  const [cameraEnabled, setCameraEnabled] = useState<boolean>(true)
 
   const mediaManager = useRef<MediaManager | null>(null)
   const audioPlayer = useRef<AudioPlayer | null>(null)
@@ -82,6 +84,9 @@ function App() {
       return
     }
 
+    setVideoStream(mediaManager.current.getStream())
+    mediaManager.current.toggleVideo(cameraEnabled)
+
     setStatus('recording')
     playEarcon('start')
     setDirectorMessage('Listening...')
@@ -127,6 +132,7 @@ function App() {
         stopHeartbeat()
         // Clean up media tracks now that the full exchange is done
         mediaManager.current?.stop()
+        setVideoStream(null)
         // Critically: Disconnect the WebSocket to enforce true privacy between turns
         apiClient.current?.disconnect()
       })
@@ -152,6 +158,7 @@ function App() {
         setDirectorMessage('Connection lost — tap to retry')
         stopHeartbeat()
         mediaManager.current?.stop()
+        setVideoStream(null)
       })
 
       // Retrieve JWT from session storage to authenticate the WebSocket request
@@ -238,6 +245,7 @@ function App() {
     setDirectorMessage(null)
     stopHeartbeat()
     mediaManager.current?.stop()
+    setVideoStream(null)
     audioPlayer.current?.stop()
     apiClient.current?.disconnect()
     if (captureInterval.current) {
@@ -277,7 +285,16 @@ function App() {
   // Determine active-like states for UI
   const isEngaged = status !== 'idle'
 
-  // ── Session Render Branching ──
+  // ── Camera Toggle ──
+  const toggleCamera = useCallback(() => {
+    const newState = !cameraEnabled
+    setCameraEnabled(newState)
+    if (mediaManager.current) {
+      mediaManager.current.toggleVideo(newState)
+    }
+  }, [cameraEnabled])
+
+  // ── Views ──
   if (isLoadingSession) {
     return (
         <div className="flex h-[100dvh] w-full items-center justify-center bg-aura-dark text-aura-light">
@@ -302,33 +319,29 @@ function App() {
       <main className="flex-1 relative w-full h-full overflow-hidden z-10">
         {activeView === 'nexus' && (
           <>
-            {/* Header Layer */}
-            <header className="absolute top-0 inset-x-0 px-8 py-10 flex justify-between items-center z-30 pointer-events-none">
-              <div className="flex items-center gap-3">
-                <div className={cn(
-                  "w-4 h-4 rounded-full transition-all duration-300",
-                  status === 'recording' && "bg-red-500 shadow-[0_0_15px_#EF4444] animate-pulse",
-                  status === 'thinking' && "bg-amber-400 shadow-[0_0_15px_#F59E0B] animate-pulse",
-                  status === 'responding' && "bg-green-400 shadow-[0_0_15px_#4ADE80] animate-pulse",
-                  status === 'reconnecting' && "bg-amber-400 shadow-[0_0_15px_#F59E0B] animate-pulse",
-                  status === 'error' && "bg-red-600",
-                  status === 'idle' && "bg-white/30"
-                )} />
-                <span className="text-[10px] font-bold tracking-[0.2em] uppercase text-white/80" role="status" aria-live="polite">
-                  {status === 'idle' && 'Ready'}
-                  {status === 'recording' && 'Recording'}
-                  {status === 'thinking' && 'Thinking'}
-                  {status === 'responding' && 'Speaking'}
-                  {status === 'reconnecting' && 'Reconnecting'}
-                  {status === 'error' && 'Error'}
-                </span>
+            {/* Header / Nav */}
+            <header className="absolute top-0 left-0 right-0 p-6 flex justify-between items-center z-50">
+              <div className="flex items-center gap-2 text-white">
+                <Eye className="w-6 h-6 text-aura-cyan" aria-hidden="true" />
+                <span className="font-bold tracking-widest uppercase text-sm">Aura</span>
               </div>
-              <button
-                onClick={() => setActiveView('settings')}
-                className="pointer-events-auto p-4 rounded-full text-white/60 hover:text-white transition-colors"
-              >
-                <Settings className="w-8 h-8" />
-              </button>
+              <div className="flex items-center gap-4">
+                <button
+                  onClick={toggleCamera}
+                  className="p-3 text-slate-300 hover:text-white transition-colors"
+                  aria-label={cameraEnabled ? "Disable Camera" : "Enable Camera"}
+                  title={cameraEnabled ? "Disable Camera" : "Enable Camera"}
+                >
+                  {cameraEnabled ? <Video className="w-6 h-6" aria-hidden="true" /> : <VideoOff className="w-6 h-6 text-red-400" aria-hidden="true" />}
+                </button>
+                <button
+                  onClick={() => setActiveView('settings')}
+                  className="p-3 text-slate-300 hover:text-white transition-colors"
+                  aria-label="Open Settings"
+                >
+                  <Settings className="w-6 h-6" aria-hidden="true" />
+                </button>
+              </div>
             </header>
 
             <Nexus
@@ -337,6 +350,8 @@ function App() {
               onStartRecording={startRecording}
               onStopRecording={stopRecording}
               onCancel={cancelSession}
+              videoStream={videoStream}
+              cameraEnabled={cameraEnabled}
             />
           </>
         )}
