@@ -4,7 +4,7 @@ import { ErrorBoundary } from 'react-error-boundary'
 import './index.css'
 import App from './App.tsx'
 
-import { FallbackProps } from 'react-error-boundary'
+import type { FallbackProps } from 'react-error-boundary'
 
 function ErrorFallback({ error, resetErrorBoundary }: FallbackProps) {
   return (
