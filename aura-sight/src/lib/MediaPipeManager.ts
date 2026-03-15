@@ -1,6 +1,9 @@
 import { ObjectDetector, FilesetResolver } from "@mediapipe/tasks-vision";
 import type { Detection } from "@mediapipe/tasks-vision";
 
+const MEDIAPIPE_VERSION = "0.10.32";
+const MEDIAPIPE_WASM_URL = `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MEDIAPIPE_VERSION}/wasm`;
+
 export interface HazardEvent {
     label: string;
     confidence: number;
@@ -18,6 +21,8 @@ export class MediaPipeManager {
     private detector: ObjectDetector | null = null;
     private isInitializing: boolean = false;
     private onHazardDetected: ((hazard: HazardEvent) => void) | null = null;
+    private frameWidth: number = 0;
+    private frameHeight: number = 0;
 
     // List of objects that trigger immediate safety warnings
     private static readonly DANGER_LABELS = ['chair', 'table', 'person', 'car', 'stairs', 'door'];
@@ -31,7 +36,7 @@ export class MediaPipeManager {
 
         try {
             const vision = await FilesetResolver.forVisionTasks(
-                "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm"
+                MEDIAPIPE_WASM_URL
             );
 
             this.detector = await ObjectDetector.createFromOptions(vision, {
@@ -60,6 +65,13 @@ export class MediaPipeManager {
     detect(videoElement: HTMLVideoElement, timestamp: number) {
         if (!this.detector) return;
 
+        const width = videoElement.videoWidth || videoElement.width || 0;
+        const height = videoElement.videoHeight || videoElement.height || 0;
+        if (width > 0 && height > 0) {
+            this.frameWidth = width;
+            this.frameHeight = height;
+        }
+
         const results = this.detector.detectForVideo(videoElement, timestamp);
         this.processDetections(results.detections);
     }
@@ -73,15 +85,16 @@ export class MediaPipeManager {
             
             // If we find a high-priority hazard, emit an event immediately
             if (MediaPipeManager.DANGER_LABELS.includes(label)) {
+                const hasFrameSize = this.frameWidth > 0 && this.frameHeight > 0;
                 this.onHazardDetected({
                     label,
                     confidence: category.score,
                     timestamp: Date.now(),
-                    boundingBox: detection.boundingBox ? {
-                        x: detection.boundingBox.originX / 512, // Normalized
-                        y: detection.boundingBox.originY / 512,
-                        w: detection.boundingBox.width / 512,
-                        h: detection.boundingBox.height / 512
+                    boundingBox: detection.boundingBox && hasFrameSize ? {
+                        x: detection.boundingBox.originX / this.frameWidth,
+                        y: detection.boundingBox.originY / this.frameHeight,
+                        w: detection.boundingBox.width / this.frameWidth,
+                        h: detection.boundingBox.height / this.frameHeight
                     } : undefined
                 });
             }

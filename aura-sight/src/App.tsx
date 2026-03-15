@@ -316,12 +316,13 @@ function App() {
         }
       });
 
-      // Get JWT for auth
+      // Get JWT for auth via Supabase helper
       let token: string | undefined = undefined;
-      const authKey = Object.keys(sessionStorage).find(k => k.startsWith('sb-') && k.endsWith('-auth-token'));
-      if (authKey) {
-        const sbData = JSON.parse(sessionStorage.getItem(authKey) || '{}');
-        token = sbData?.access_token;
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        token = session?.access_token
+      } catch (err) {
+        console.warn('Failed to retrieve Supabase session for auth:', err)
       }
 
       // Re-use connection if already active
@@ -415,6 +416,13 @@ function App() {
     if (isEngaged) {
       await mediaManager.current.initialize(currentCameras[nextIndex].id)
       setVideoStream(mediaManager.current.getStream())
+      try {
+        await mediaManager.current.startAudioCapture((pcm16) => {
+          apiClient.current?.sendAudioChunk(pcm16)
+        })
+      } catch (err) {
+        console.error('Failed to restart audio capture after camera switch:', err)
+      }
     }
   }, [cameras, currentCameraIndex, isEngaged])
 

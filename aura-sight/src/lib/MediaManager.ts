@@ -86,11 +86,34 @@ export class MediaManager {
                 this.videoElement.srcObject = this.stream;
                 // Wait for the video to be ready
                 await new Promise((resolve) => {
-                    if (this.videoElement) {
-                        this.videoElement.onloadedmetadata = () => {
-                            this.videoElement?.play().then(resolve);
-                        };
-                    } else resolve(null);
+                    if (!this.videoElement) {
+                        resolve(null);
+                        return;
+                    }
+                    const video = this.videoElement;
+                    let settled = false;
+                    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+                    const finalize = () => {
+                        if (settled) return;
+                        settled = true;
+                        video.onloadedmetadata = null;
+                        video.onerror = null;
+                        if (timeoutId) clearTimeout(timeoutId);
+                        resolve(null);
+                    };
+                    timeoutId = setTimeout(() => {
+                        console.warn('Timed out waiting for video metadata');
+                        finalize();
+                    }, 2000);
+                    video.onloadedmetadata = () => {
+                        const playPromise = video.play();
+                        if (playPromise && typeof playPromise.then === 'function') {
+                            playPromise.catch((e) => console.warn('Video autoplay failed:', e)).finally(() => finalize());
+                        } else {
+                            finalize();
+                        }
+                    };
+                    video.onerror = () => finalize();
                 });
             }
 

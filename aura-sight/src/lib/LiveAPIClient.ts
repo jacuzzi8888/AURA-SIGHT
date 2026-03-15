@@ -198,15 +198,25 @@ RESPONSE PROTOCOL:
             };
 
             this.ws.onmessage = async (event) => {
-                let text: string;
+                let text: string | null = null;
                 if (event.data instanceof Blob) {
                     text = await event.data.text();
-                } else {
+                } else if (typeof event.data === 'string') {
                     text = event.data;
+                } else {
+                    console.warn('LiveAPIClient: Non-text message received, ignoring.');
+                    return;
                 }
+
                 // DEBUG: Log every raw message from server
                 console.log('[DEBUG] Raw server message:', text.substring(0, 500));
-                const data = JSON.parse(text);
+                let data: any;
+                try {
+                    data = JSON.parse(text);
+                } catch (err) {
+                    console.warn('LiveAPIClient: Non-JSON message from server, ignoring.', err);
+                    return;
+                }
                 this.handleServerMessage(data);
             };
 
@@ -254,17 +264,16 @@ RESPONSE PROTOCOL:
         await new Promise(r => setTimeout(r, delay));
 
         try {
-            // Retrieve JWT from session storage directly (or however the auth layer persists it)
-            // For now, look for a standard Supabase token
+            // Retrieve JWT via official Supabase helper
             let token: string | undefined = undefined;
             try {
-                const sbDataStr = Object.entries(sessionStorage).find(([k]) => k.startsWith('sb-') && k.endsWith('-auth-token'))?.[1];
-                if (sbDataStr) {
-                    const sbData = JSON.parse(sbDataStr);
-                    token = sbData?.access_token;
+                const { data: { session }, error } = await supabase.auth.getSession();
+                if (error) {
+                    console.warn('Could not retrieve session for reconnect:', error.message);
                 }
+                token = session?.access_token;
             } catch (e) {
-                console.warn('Could not extract session token for reconnect');
+                console.warn('Could not retrieve session token for reconnect');
             }
 
             await this.connect(token);

@@ -16,8 +16,11 @@ export const MemoryManager: React.FC = () => {
 
     const loadMemories = async () => {
         setLoading(true);
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return;
+        const { data: { user }, error: userError } = await supabase.auth.getUser();
+        if (userError || !user) {
+            setLoading(false);
+            return;
+        }
 
         const { data, error } = await supabase
             .from('ai_memory')

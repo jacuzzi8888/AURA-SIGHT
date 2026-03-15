@@ -160,32 +160,40 @@ wss.on('connection', async (ws, req) => {
     });
 
     let hasSentSetup = false;
+    const pendingClientMessages = [];
+
+    const sendToGoogle = (data, isBinary) => {
+        if (googleWs.readyState !== WebSocket.OPEN) {
+            pendingClientMessages.push({ data, isBinary });
+            return;
+        }
+
+        if (!hasSentSetup && !isBinary) {
+            try {
+                const msgStr = data.toString();
+                const msgJson = JSON.parse(msgStr);
+                
+                if (msgJson.setup && msgJson.setup.systemInstruction) {
+                    // Inject our secure Supabase context into the prompt
+                    console.log('Injecting Supabase Context into Gemini Setup...');
+                    msgJson.setup.systemInstruction.parts[0].text += `\n\n${userContextStr}`;
+                    googleWs.send(JSON.stringify(msgJson), { binary: false });
+                    hasSentSetup = true;
+                    return; // Successfully intercepted and injected
+                }
+            } catch (e) {
+                // Not JSON or failed to parse, pass through normally
+                console.error('Error parsing client message for setup interception:', e);
+            }
+        }
+        
+        // Default pass-through behavior
+        googleWs.send(data, { binary: isBinary });
+    };
 
     // Proxy messages from the Client to Google
     ws.on('message', (data, isBinary) => {
-        if (googleWs.readyState === WebSocket.OPEN) {
-            if (!hasSentSetup && !isBinary) {
-                try {
-                    const msgStr = data.toString();
-                    const msgJson = JSON.parse(msgStr);
-                    
-                    if (msgJson.setup && msgJson.setup.systemInstruction) {
-                        // Inject our secure Supabase context into the prompt
-                        console.log('Injecting Supabase Context into Gemini Setup...');
-                        msgJson.setup.systemInstruction.parts[0].text += `\n\n${userContextStr}`;
-                        googleWs.send(JSON.stringify(msgJson), { binary: false });
-                        hasSentSetup = true;
-                        return; // Successfully intercepted and injected
-                    }
-                } catch (e) {
-                    // Not JSON or failed to parse, pass through normally
-                    console.error('Error parsing client message for setup interception:', e);
-                }
-            }
-            
-            // Default pass-through behavior
-            googleWs.send(data, { binary: isBinary });
-        }
+        sendToGoogle(data, isBinary);
     });
 
     googleWs.on('open', () => {
@@ -196,6 +204,12 @@ wss.on('connection', async (ws, req) => {
         // a more robust approach (for the hackathon) is having the proxy securely 
         // *construct* the setup, or inject the instructions here. 
         // Wait, the client sends its own `setup`. We must intercept it.
+
+        // Flush any queued client messages now that the upstream is open
+        while (pendingClientMessages.length > 0) {
+            const msg = pendingClientMessages.shift();
+            sendToGoogle(msg.data, msg.isBinary);
+        }
 
         // Start heartbeat: ping every 30 seconds to keep connection alive
         heartbeatInterval = setInterval(() => {
@@ -222,7 +236,9 @@ wss.on('connection', async (ws, req) => {
 
     googleWs.on('error', (err) => {
         console.error('Google WebSocket error:', err);
-        ws.send(JSON.stringify({ error: 'Upstream connection error', code: 'UPSTREAM_ERROR' }));
+        if (ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ error: 'Upstream connection error', code: 'UPSTREAM_ERROR' }));
+        }
     });
 
     ws.on('error', (err) => {
