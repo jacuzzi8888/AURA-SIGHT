@@ -40,7 +40,6 @@ function App() {
   const [currentCameraIndex, setCurrentCameraIndex] = useState(0)
   const [isHandsFree, setIsHandsFree] = useState<boolean>(false)
   const isHandsFreeRef = useRef<boolean>(false)
-  const [wasLastResponseQuestion, setWasLastResponseQuestion] = useState<boolean>(false)
   const wasLastResponseQuestionRef = useRef<boolean>(false)
   const listeningTimeoutRef = useRef<number | null>(null)
 
@@ -120,7 +119,6 @@ function App() {
         
         // Simple question detection - ends with ?
         const isQuestion = text.trim().endsWith('?');
-        setWasLastResponseQuestion(isQuestion);
         wasLastResponseQuestionRef.current = isQuestion;
       })
 
