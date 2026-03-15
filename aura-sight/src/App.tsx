@@ -26,6 +26,13 @@ function App() {
 
   const [activeView, setActiveView] = useState<ViewMode>('nexus')
   const [status, setStatus] = useState<AuraStatus>('idle')
+  const statusRef = useRef<AuraStatus>('idle')
+  
+  // Helper to keep ref in sync with state
+  const updateStatus = useCallback((newStatus: AuraStatus) => {
+    setStatus(newStatus)
+    statusRef.current = newStatus
+  }, [])
   const [directorMessage, setDirectorMessage] = useState<string | null>(null)
   const [videoStream, setVideoStream] = useState<MediaStream | null>(null)
   const [cameraEnabled, setCameraEnabled] = useState<boolean>(true)
@@ -84,7 +91,7 @@ function App() {
     try {
       await mediaManager.current.initialize()
     } catch (err) {
-      setStatus('error')
+      updateStatus('error')
       playEarcon('error')
       setDirectorMessage('Camera access denied')
       return
@@ -93,7 +100,7 @@ function App() {
     setVideoStream(mediaManager.current.getStream())
     mediaManager.current.toggleVideo(cameraEnabled)
 
-    setStatus('recording')
+    updateStatus('recording')
     playEarcon('start')
     setDirectorMessage('Listening...')
     startHeartbeat()
@@ -105,12 +112,12 @@ function App() {
 
       apiClient.current!.onContent((text) => {
         setDirectorMessage(text)
-        setStatus('responding')
+        updateStatus('responding')
         stopHeartbeat()
       })
 
       apiClient.current!.onAudio((pcm16) => {
-        setStatus('responding')
+        updateStatus('responding')
         stopHeartbeat()
         audioPlayer.current?.queueAudio(pcm16)
       })
@@ -122,12 +129,12 @@ function App() {
 
       apiClient.current!.onTurnComplete(() => {
         if (isHandsFreeRef.current) {
-          setStatus('recording')
+          updateStatus('recording')
           setDirectorMessage('Watching...')
           startHeartbeat()
           return
         }
-        setStatus('idle')
+        updateStatus('idle')
         setDirectorMessage(null)
         stopHeartbeat()
         mediaManager.current?.stop()
@@ -148,9 +155,13 @@ function App() {
       })
 
       apiClient.current!.onDisconnect(() => {
-        setStatus('error')
-        playEarcon('error')
-        setDirectorMessage('Connection lost')
+        // Only show error if we were actually in an active session
+        // If we're idle, the connection might close due to timeout, which is fine
+        if (statusRef.current !== 'idle' && statusRef.current !== 'error') {
+          updateStatus('error')
+          playEarcon('error')
+          setDirectorMessage('Connection lost')
+        }
         stopHeartbeat()
         mediaManager.current?.stop()
         setVideoStream(null)
@@ -181,7 +192,7 @@ function App() {
       }, 1000)
 
     } catch (err) {
-      setStatus('error')
+      updateStatus('error')
       playEarcon('error')
       setDirectorMessage('Connection failed')
       stopHeartbeat()
@@ -201,7 +212,7 @@ function App() {
     }
 
     apiClient.current?.sendTurnComplete()
-    setStatus('thinking')
+    updateStatus('thinking')
     playEarcon('thinking')
     setDirectorMessage('Processing...')
     stopHeartbeat()
@@ -209,7 +220,7 @@ function App() {
   }, [stopHeartbeat])
 
   const cancelSession = useCallback(() => {
-    setStatus('idle')
+    updateStatus('idle')
     setDirectorMessage(null)
     setIsHandsFree(false)
     isHandsFreeRef.current = false
