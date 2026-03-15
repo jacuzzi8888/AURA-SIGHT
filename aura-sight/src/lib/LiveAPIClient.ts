@@ -78,9 +78,6 @@ export class LiveAPIClient {
                                 generationConfig: {
                                     responseModalities: ["AUDIO"],
                                 },
-                                realtimeInputConfig: {
-                                    automaticActivityDetection: {}
-                                },
                                 // Enable context window compression for unlimited session duration
                                 // Without this: audio-only = 15 min max, audio+video = 2 min max
                                 contextWindowCompression: {
