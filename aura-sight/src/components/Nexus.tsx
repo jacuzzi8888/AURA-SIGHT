@@ -180,16 +180,23 @@ export const Nexus: React.FC<NexusProps> = ({
                     {/* Live Camera Feed (Masked by rounded-full on parent) */}
                     {(status === 'recording' || status === 'responding' || isHandsFree) && videoStream && cameraEnabled && (
                         <div className={cn(
-                            "absolute inset-0 w-full h-full transition-opacity duration-300",
-                            isHandsFree && status === 'idle' ? "opacity-40 animate-pulse" : "opacity-60"
+                            "absolute inset-0 w-full h-full transition-all duration-700",
+                            isHandsFree && status === 'idle' ? "opacity-80 scale-110 blur-[1px]" : "opacity-60"
                         )}>
                             <video
                                 ref={videoRef}
                                 autoPlay
                                 playsInline
                                 muted
-                                className="w-full h-full object-cover mix-blend-screen pointer-events-none"
+                                className={cn(
+                                    "w-full h-full object-cover pointer-events-none transition-filter duration-700",
+                                    isHandsFree && status === 'idle' ? "grayscale-[0.3] contrast-125 saturate-150" : "mix-blend-screen"
+                                )}
                             />
+                            {/* Scanning Line overlay for Hands-Free */}
+                            {isHandsFree && status === 'idle' && (
+                                <div className="absolute inset-0 bg-gradient-to-b from-transparent via-aura-cyan/20 to-transparent h-1/2 w-full animate-scan pointer-events-none" />
+                            )}
                         </div>
                     )}
 
