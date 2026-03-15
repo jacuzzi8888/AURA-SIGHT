@@ -79,9 +79,7 @@ export class LiveAPIClient {
                                     responseModalities: ["AUDIO"],
                                 },
                                 realtimeInputConfig: {
-                                    automaticActivityDetection: {
-                                        speechThreshold: 0.3,
-                                    }
+                                    automaticActivityDetection: {}
                                 },
                                 // Enable context window compression for unlimited session duration
                                 // Without this: audio-only = 15 min max, audio+video = 2 min max
