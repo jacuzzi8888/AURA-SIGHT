@@ -207,7 +207,7 @@ export const Nexus: React.FC<NexusProps> = ({
                     {(status === 'recording' || status === 'responding' || status === 'watching' || status === 'reconnecting' || isHandsFree) && videoStream && cameraEnabled && (
                         <div className={cn(
                             "absolute inset-0 w-full h-full transition-all duration-700",
-                            (status === 'watching' || isHandsFree && status === 'idle') ? "opacity-100 scale-100" : "opacity-60"
+                            (status === 'watching' || isHandsFree) ? "opacity-100 scale-100" : "opacity-60"
                         )}>
                             <video
                                 ref={videoRef}
