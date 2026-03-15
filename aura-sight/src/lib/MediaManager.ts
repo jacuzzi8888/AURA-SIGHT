@@ -13,8 +13,26 @@ export class MediaManager {
     private audioContext: AudioContext | null = null;
     private processor: AudioWorkletNode | null = null;
     private onAudioData: ((data: Int16Array) => void) | null = null;
+    private videoElement: HTMLVideoElement | null = null;
+    private canvas: HTMLCanvasElement | null = null;
+    private ctx: CanvasRenderingContext2D | null = null;
 
-    constructor() {}
+    constructor() {
+        // Create a hidden video element and canvas once to avoid overhead
+        if (typeof document !== 'undefined') {
+            this.videoElement = document.createElement('video');
+            this.videoElement.setAttribute('autoplay', '');
+            this.videoElement.setAttribute('muted', '');
+            this.videoElement.setAttribute('playsinline', '');
+            this.videoElement.style.display = 'none';
+            document.body.appendChild(this.videoElement);
+
+            this.canvas = document.createElement('canvas');
+            this.canvas.width = 512;
+            this.canvas.height = 512;
+            this.ctx = this.canvas.getContext('2d', { alpha: false });
+        }
+    }
 
     /**
      * Enumerates available video input devices and returns a clean list
@@ -62,6 +80,19 @@ export class MediaManager {
             this.videoTrack = this.stream.getVideoTracks()[0];
             this.audioTrack = this.stream.getAudioTracks()[0];
 
+            // Attach the stream to our hidden video element for frame capture
+            if (this.videoElement) {
+                this.videoElement.srcObject = this.stream;
+                // Wait for the video to be ready
+                await new Promise((resolve) => {
+                    if (this.videoElement) {
+                        this.videoElement.onloadedmetadata = () => {
+                            this.videoElement?.play().then(resolve);
+                        };
+                    } else resolve(null);
+                });
+            }
+
             console.log("Media initialized successfully with", deviceId ? `device ${deviceId}` : 'default back camera');
             playEarcon('success');
         } catch (error) {
@@ -76,20 +107,13 @@ export class MediaManager {
      * Optimized for 2026 Gemini Live processing (512x512).
      */
     captureFrame(): string | null {
-        if (!this.stream || !this.videoTrack) return null;
+        if (!this.stream || !this.videoTrack || !this.videoElement || !this.ctx || !this.canvas) return null;
 
-        // In a real browser environment, we'd use a shared offscreen video element.
-        // For this implementation, we simulate the capture from the active track.
-        const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d');
-        if (!ctx) return null;
-
-        canvas.width = 512;
-        canvas.height = 512;
+        // Draw the current video frame onto the 512x512 canvas
+        this.ctx.drawImage(this.videoElement, 0, 0, this.canvas.width, this.canvas.height);
         
-        // Note: Real implementation would draw from a hidden <video> element
-        // correctly sized to the track's settings.
-        return canvas.toDataURL('image/jpeg', 0.6).split(',')[1];
+        // Return base64 JPEG at 0.6 quality (sweet spot for Gemini)
+        return this.canvas.toDataURL('image/jpeg', 0.6).split(',')[1];
     }
 
     async startAudioCapture(onAudioData: (data: Int16Array) => void) {
@@ -126,6 +150,9 @@ export class MediaManager {
                 track.enabled = false;
             });
             this.stream = null;
+        }
+        if (this.videoElement) {
+            this.videoElement.srcObject = null;
         }
         if (this.audioContext && this.audioContext.state !== 'closed') {
             this.audioContext.close();
