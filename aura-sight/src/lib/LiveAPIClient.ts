@@ -27,6 +27,7 @@ export class LiveAPIClient {
     private onGoAwayHandler: (timeLeft: number) => void = () => { };
     private onTurnCompleteHandler: () => void = () => { };
     private onHandsFreeToggleHandler: (enabled: boolean) => void = () => { };
+    private onTranscriptionHandler: (text: string) => void = () => { };
     private onReconnectingHandler: (attempt: number) => void = () => { };
     private onReconnectedHandler: () => void = () => { };
     public isConnected: boolean = false;
@@ -402,6 +403,14 @@ PROACTIVE BEHAVIORS & WATCHING PROTOCOL:
                 this.onTurnCompleteHandler();
             }
         }
+
+        // Handle Audio Transcription (User input)
+        const transcription = message.transcription || message.audio_transcription;
+        if (transcription && (transcription.text || transcription.transcript)) {
+            const transcript = transcription.text || transcription.transcript;
+            console.log('User transcript received:', transcript);
+            this.onTranscriptionHandler(transcript);
+        }
     }
 
     /**
@@ -519,6 +528,10 @@ PROACTIVE BEHAVIORS & WATCHING PROTOCOL:
 
     onHandsFreeToggle(handler: (enabled: boolean) => void) {
         this.onHandsFreeToggleHandler = handler;
+    }
+
+    onTranscription(handler: (text: string) => void) {
+        this.onTranscriptionHandler = handler;
     }
 
     onReconnecting(handler: (attempt: number) => void) {

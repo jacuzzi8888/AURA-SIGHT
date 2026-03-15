@@ -169,6 +169,7 @@ export const Nexus: React.FC<NexusProps> = ({
                         status === 'recording' && "bg-red-500/80 scale-100 border-none shadow-[0_0_80px_rgba(239,68,68,0.5)] animate-pulse",
                         status === 'thinking' && "scale-100 border-none shadow-[0_0_60px_rgba(245,158,11,0.4)]",
                         status === 'responding' && "bg-aura-primary scale-100 border-none shadow-[0_0_80px_rgba(19,127,236,0.6)]",
+                        status === 'listening' && "bg-aura-amber scale-100 border-none shadow-[0_0_80px_rgba(245,158,11,0.6)] animate-pulse",
                         status === 'error' && "bg-red-800/60 scale-100 border-none shadow-[0_0_40px_rgba(239,68,68,0.3)]",
                         isHandsFree && status === 'idle' && "bg-aura-cyan/40 scale-100 border-2 border-aura-cyan shadow-[0_0_60px_rgba(19,127,236,0.4)] animate-pulse"
                     )}

@@ -24,6 +24,7 @@
 
 *   ✅ **High Fidelity Audio**: Fixed sample rate mismatch (16kHz -> 24kHz).
 *   ✅ **Unlimited Session Duration**: Context compression and resumption implemented.
-*   ✅ **Robust Reconnection**: Exponential backoff handles network glitches.
-*   ✅ **Push-to-Talk Isolation**: Fixed proactive comment bug by enforcing hard disconnects between turns.
-*   ✅ **Fully Verified**: Data flow, audio playback, and context retention are 100% functional.
+*   ✅ **Hands-Free Mode**: Implemented voice-activated persistent monitoring ("Aura, watch this").
+*   ✅ **Stable Connection**: Resolved 1007 JSON handshake error.
+*   ✅ **Immersive UI**: Added high-contrast scanning visuals for watch mode.
+*   🕒 **Interactive Ear (Planned)**: Conditional Hot-Mic with 10s auto-timeout and "Amber" state for AI questions.

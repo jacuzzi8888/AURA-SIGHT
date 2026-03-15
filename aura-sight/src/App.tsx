@@ -17,7 +17,7 @@ function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
-export type AuraStatus = 'idle' | 'recording' | 'thinking' | 'responding' | 'error' | 'reconnecting'
+export type AuraStatus = 'idle' | 'recording' | 'thinking' | 'responding' | 'listening' | 'error' | 'reconnecting'
 type ViewMode = 'nexus' | 'settings' | 'loading'
 
 function App() {
@@ -40,6 +40,9 @@ function App() {
   const [currentCameraIndex, setCurrentCameraIndex] = useState(0)
   const [isHandsFree, setIsHandsFree] = useState<boolean>(false)
   const isHandsFreeRef = useRef<boolean>(false)
+  const [wasLastResponseQuestion, setWasLastResponseQuestion] = useState<boolean>(false)
+  const wasLastResponseQuestionRef = useRef<boolean>(false)
+  const listeningTimeoutRef = useRef<number | null>(null)
 
   const mediaManager = useRef<MediaManager | null>(null)
   const audioPlayer = useRef<AudioPlayer | null>(null)
@@ -114,6 +117,11 @@ function App() {
         setDirectorMessage(text)
         updateStatus('responding')
         stopHeartbeat()
+        
+        // Simple question detection - ends with ?
+        const isQuestion = text.trim().endsWith('?');
+        setWasLastResponseQuestion(isQuestion);
+        wasLastResponseQuestionRef.current = isQuestion;
       })
 
       apiClient.current!.onAudio((pcm16) => {
@@ -153,13 +161,37 @@ function App() {
           }
           return;
         }
+
+        if (wasLastResponseQuestionRef.current) {
+          // ENTER CONDITIONAL HOT-MIC (LISTENING)
+          updateStatus('listening');
+          setDirectorMessage('Aura is listening...');
+          
+          // Restart audio capture for VAD/Interaction
+          try {
+            await mediaManager.current?.startAudioCapture((pcm16) => {
+              apiClient.current?.sendAudioChunk(pcm16);
+            });
+          } catch (err) {
+            console.error("Failed to start audio capture for listening state:", err);
+          }
+
+          // Set auto-timeout
+          if (listeningTimeoutRef.current) clearTimeout(listeningTimeoutRef.current);
+          listeningTimeoutRef.current = window.setTimeout(() => {
+            if (statusRef.current === 'listening') {
+              cancelSession();
+            }
+          }, 10000); // 10s timeout
+          
+          return;
+        }
+
         updateStatus('idle')
         setDirectorMessage(null)
         stopHeartbeat()
         mediaManager.current?.stop()
         setVideoStream(null)
-        // Keep the connection alive for the next interaction
-        // apiClient.current?.disconnect()
       })
 
       apiClient.current!.onHandsFreeToggle((enabled) => {
@@ -176,6 +208,12 @@ function App() {
           if (statusRef.current === 'idle') {
             cancelSession();
           }
+        }
+      });
+
+      apiClient.current!.onTranscription((transcript) => {
+        if (statusRef.current === 'recording' || statusRef.current === 'listening') {
+          setDirectorMessage(`"${transcript}"`);
         }
       });
 
