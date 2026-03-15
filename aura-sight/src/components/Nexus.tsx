@@ -101,12 +101,19 @@ export const Nexus: React.FC<NexusProps> = ({
 
     // ── Bind Video Stream ──
     useEffect(() => {
-        if (videoRef.current && videoStream) {
-            videoRef.current.srcObject = videoStream;
-        } else if (videoRef.current) {
-            videoRef.current.srcObject = null;
-        }
-    }, [videoStream]);
+        const bindStream = () => {
+            if (videoRef.current && videoStream) {
+                videoRef.current.srcObject = videoStream;
+            } else if (videoRef.current) {
+                videoRef.current.srcObject = null;
+            }
+        };
+        bindStream();
+        
+        // Robust re-bind for state changes (e.g., responding -> watching)
+        const timer = setTimeout(bindStream, 150);
+        return () => clearTimeout(timer);
+    }, [videoStream, status]);
 
     // ── Status Text ──
     const statusLabel = (() => {
@@ -242,13 +249,13 @@ export const Nexus: React.FC<NexusProps> = ({
             </button>
 
             {/* Instructions (Idle) */}
-            {status === 'idle' && (
+            {status === 'idle' && !isHandsFree && (
                 <div className={cn("absolute bottom-32 text-center z-10 transition-opacity duration-300", isPressing ? "opacity-0" : "opacity-100")}>
                     <p className="text-white text-xl font-medium tracking-tight opacity-90 px-8">
-                        {isHandsFree ? 'Hands-Free Monitoring' : 'Hold to talk to Aura'}
+                        Hold to talk to Aura
                     </p>
                     <p className="text-slate-300 text-[10px] font-bold tracking-[0.3em] uppercase mt-3 opacity-60">
-                        {isHandsFree ? 'Tap to Exit' : 'Aura Sentinel • Active'}
+                        Aura Sentinel • Active
                     </p>
                 </div>
             )}

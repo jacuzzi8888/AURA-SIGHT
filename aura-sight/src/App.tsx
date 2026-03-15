@@ -31,10 +31,11 @@ function App() {
   const statusRef = useRef<AuraStatus>('idle')
   
   // Helper to keep ref in sync with state
-  const updateStatus = useCallback((newStatus: AuraStatus) => {
-    setStatus(newStatus)
+  const updateStatus = (newStatus: AuraStatus) => {
+    if (statusRef.current === newStatus) return
     statusRef.current = newStatus
-  }, [])
+    setStatus(newStatus)
+  }
   const [directorMessage, setDirectorMessage] = useState<string | null>(null)
   const [videoStream, setVideoStream] = useState<MediaStream | null>(null)
   const [cameraEnabled, setCameraEnabled] = useState<boolean>(true)
@@ -171,14 +172,17 @@ function App() {
           // Force clear any privacy masks to ensure feed is clear (except for persons)
           mediaManager.current?.setPrivacyMasks([]);
 
-          // RESTART AUDIO CAPTURE FOR VAD
-          try {
-            await mediaManager.current?.startAudioCapture((pcm16) => {
-              apiClient.current?.sendAudioChunk(pcm16);
-            });
-          } catch (err) {
-            console.error("Failed to restart audio capture in hands-free mode:", err);
-          }
+          // RESTART AUDIO CAPTURE FOR VAD with a robust delay
+          // This allows session resumption / token update to stabilize
+          setTimeout(async () => {
+            try {
+              await mediaManager.current?.startAudioCapture((pcm16) => {
+                apiClient.current?.sendAudioChunk(pcm16);
+              });
+            } catch (err) {
+              console.error("Failed to restart audio capture in hands-free mode:", err);
+            }
+          }, 300);
 
           // Ensure capture interval is running
           if (!captureInterval.current) {

@@ -114,7 +114,9 @@ RESPONSE PROTOCOL:
 - DO NOT default to a generic "scene description." If the user hasn't asked a question, provide one proactive safety or utility tip based on the "Core 4."
 
 HANDS-FREE PROTOCOL:
-- If triggered into 'eyes' mode via "Watch this" or "Be my eyes", you become a constant proactive observer. Maintain the "Director" stance, guiding their movement or providing relevant social/safety context without being asked.`
+- If triggered into 'eyes' mode via "Watch this" or "Be my eyes", you become a constant proactive observer. 
+- MANDATORY ZERO-INTRO RULE: When executing 'toggle_hands_free', do NOT describe the scene or provide an intro. Respond ONLY with a brief confirmation (e.g., "Initiating Watch Mode"). 
+- Maintain the "Director" stance, guiding their movement or providing relevant social/safety context without being asked. Do not be passive.`
                                     }]
                                 },
                                 tools: [
