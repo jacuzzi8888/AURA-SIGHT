@@ -78,8 +78,8 @@ export class LiveAPIClient {
                                 generationConfig: {
                                     responseModalities: ["AUDIO"],
                                 },
-                                voiceActivityDetection: {
-                                    voiceActivityFilter: {
+                                realtimeInputConfig: {
+                                    automaticActivityDetection: {
                                         speechThreshold: 0.3,
                                     }
                                 },
