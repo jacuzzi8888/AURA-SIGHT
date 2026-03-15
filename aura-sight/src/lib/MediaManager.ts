@@ -151,6 +151,7 @@ export class MediaManager {
         }
         this.ctx.restore();
     }
+    async startAudioCapture(onAudioData: (data: Int16Array) => void) {
         this.onAudioData = onAudioData;
         if (!this.stream) return;
 
