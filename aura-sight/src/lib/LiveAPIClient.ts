@@ -1,35 +1,30 @@
+import { supabase } from './supabase';
+import { GoogleGenAI } from '@google/genai';
+
 const PRODUCTION_PROXY_URL = 'aura-proxy-432140310963.us-central1.run.app';
 const API_BASE_URL = typeof window !== 'undefined' && window.location.hostname === 'localhost'
     ? 'localhost:8080'
     : PRODUCTION_PROXY_URL;
 
 /**
- * LiveAPIClient handles the WebSocket connection to the Aura Proxy,
- * managing the bidirectional stream of audio/video to Gemini Multimodal Live API.
- *
- * Features (2026 standard):
- * - Context window compression for unlimited session duration
- * - Session resumption with transparent token management
- * - GoAway pre-termination handling
- * - Proper interruption signaling
- * - Exponential backoff reconnection with jitter
- * - Function Calling (Supabase AI Memory)
+ * LiveAPIClient handles the bidirectional stream of audio/video to Gemini 
+ * using the official @google/genai SDK via the Aura Proxy.
  */
-import { supabase } from './supabase';
-
 export class LiveAPIClient {
-    private ws: WebSocket | null = null;
-    private readonly url: string;
+    private session: any | null = null;
+    private readonly baseUrl: string;
+    private readonly proxyHost: string;
+
     private onContentHandler: (text: string) => void = () => { };
     private onAudioHandler: (data: Int16Array) => void = () => { };
     private onDisconnectHandler: (reason: string) => void = () => { };
     private onInterruptedHandler: () => void = () => { };
     private onGoAwayHandler: (timeLeft: number) => void = () => { };
     private onTurnCompleteHandler: () => void = () => { };
-    private onHandsFreeToggleHandler: (enabled: boolean) => void = () => { };
     private onTranscriptionHandler: (text: string) => void = () => { };
     private onReconnectingHandler: (attempt: number) => void = () => { };
     private onReconnectedHandler: () => void = () => { };
+    
     public isConnected: boolean = false;
     private isStable: boolean = false;
     private messageQueue: any[] = [];
@@ -37,534 +32,269 @@ export class LiveAPIClient {
     // Reconnection state
     private reconnectAttempts: number = 0;
     private readonly maxReconnectAttempts: number = 15;
-    private readonly baseDelay: number = 1000;
-    private readonly maxDelay: number = 30000;
     private shouldReconnect: boolean = true;
 
     // Session resumption
     private resumptionToken: string | null = null;
 
-    constructor(url?: string) {
-        if (url) {
-            this.url = url;
-        } else {
-            // Use protocol-relative logic for the default URL
-            const protocol = API_BASE_URL.includes('localhost') ? 'ws' : 'wss';
-            this.url = `${protocol}://${API_BASE_URL}`;
+    constructor() {
+        this.proxyHost = API_BASE_URL;
+        const protocol = API_BASE_URL.includes('localhost') ? 'http' : 'https';
+        this.baseUrl = `${protocol}://${API_BASE_URL}`;
+    }
+
+    /**
+     * Connects to the proxy and initializes the Gemini session using the SDK.
+     */
+    async connect(jwtToken?: string) {
+        if (!jwtToken) {
+            const { data: { session } } = await supabase.auth.getSession();
+            jwtToken = session?.access_token;
+        }
+
+        console.log("LiveAPIClient: Initializing SDK with base URL:", this.baseUrl);
+        
+        const ai = new GoogleGenAI({
+            apiKey: jwtToken || 'no-token', // Our proxy uses this as the JWT
+            // Note: In Vertex AI mode with a proxy, we use the SDK's ability to override base URL
+            httpOptions: {
+                baseUrl: this.baseUrl
+            }
+        });
+
+        const modelId = "gemini-2.0-flash-live-preview-01-21";
+
+        try {
+            this.session = await ai.live.connect({
+                model: modelId,
+                config: {
+                    generationConfig: {
+                        responseModalities: ["audio"],
+                    },
+                    systemInstruction: {
+                        parts: [{
+                            text: `You are Aura Sight, a frontier-class multisensory AI companion for the visually impaired.
+SILENT PROXY PROTOCOL: Do not proactively narrate. Only respond when explicitly asked or when a turn is completed.
+Personality: Professional, concise, minimalist.`
+                        }]
+                    },
+                    tools: [
+                        {
+                            functionDeclarations: [
+                                {
+                                    name: "add_allergy",
+                                    description: "Adds a new allergy to the user's profile.",
+                                    parameters: {
+                                        type: "object",
+                                        properties: { allergy: { type: "string" } },
+                                        required: ["allergy"]
+                                    }
+                                },
+                                {
+                                    name: "save_fact",
+                                    description: "Saves a general fact about the user.",
+                                    parameters: {
+                                        type: "object",
+                                        properties: { fact: { type: "string" } },
+                                        required: ["fact"]
+                                    }
+                                }
+                            ]
+                        }
+                    ]
+                },
+                callbacks: {
+                    onopen: () => {
+                        console.log('LiveAPIClient: SDK Session Connected');
+                        this.isConnected = true;
+                        this.isStable = true;
+                        this.reconnectAttempts = 0;
+                        this.flushMessageQueue();
+                    },
+                    onmessage: (msg: any) => {
+                        this.handleServerMessage(msg);
+                    },
+                    onclose: (event: any) => {
+                        console.warn('LiveAPIClient: SDK Session Closed', event);
+                        this.isConnected = false;
+                        if (this.shouldReconnect) {
+                            this.attemptReconnect();
+                        } else {
+                            this.onDisconnectHandler(event.reason || "Connection closed");
+                        }
+                    },
+                    onerror: (err: any) => {
+                        console.error('LiveAPIClient: SDK Session Error', err);
+                    }
+                }
+            });
+        } catch (err) {
+            console.error("LiveAPIClient: SDK Connection failed", err);
+            throw err;
         }
     }
 
-    /**
-     * Connects to the proxy and initializes the Gemini session.
-     * @param jwtToken - Optional Supabase JWT for secure backend proxy authentication.
-     */
-    async connect(jwtToken?: string) {
-        console.log("LiveAPIClient: Connecting to", this.url);
-        return new Promise<void>((resolve, reject) => {
-            // Pass the JWT via the standard WebSocket sub-protocols header.
-            // This is the only secure way to pass headers in browser WebSockets.
-            const protocols = jwtToken ? ['jwt', jwtToken] : undefined;
-            this.ws = new WebSocket(this.url, protocols);
-
-            this.ws.onopen = () => {
-                console.log('LiveAPIClient: Connected to Aura Proxy');
-
-                const sendSetup = () => {
-                    if (this.ws?.readyState === WebSocket.OPEN) {
-                        this.isConnected = true;
-                        this.reconnectAttempts = 0; // Reset on successful connection
-
-                        // Initial Setup Message for Vertex AI (camelCase required)
-                        const setupMessage: any = {
-                            setup: {
-                                model: "projects/ocellus-488718/locations/us-central1/publishers/google/models/gemini-live-2.5-flash-native-audio",
-                                generationConfig: {
-                                    responseModalities: ["AUDIO"],
-                                },
-                                // Enable context window compression for unlimited session duration
-                                // Without this: audio-only = 15 min max, audio+video = 2 min max
-                                contextWindowCompression: {
-                                    slidingWindow: {},
-                                    triggerTokens: 25600,
-                                },
-                                // Enable session resumption for reconnection resilience
-                                sessionResumption: {
-                                    transparent: true,
-                                    ...(this.resumptionToken ? { handle: this.resumptionToken } : {}),
-                                },
-                                systemInstruction: {
-                                    parts: [{
-                                        text: `You are Aura Sight, a frontier-class multisensory AI companion for the visually impaired. You are the user's "Visual Proxy."
-
-SILENT PROXY PROTOCOL (DIRECT INTENT):
-1. **Absolute Silence**: You are a silent observer. You MUST NOT describe the scene or provide intros unless the user explicitly commits a turn seeking information.
-2. **Intent-Only Response**: Only process and respond to the context when you receive a turn-complete signal. 
-3. **No Proactive Narration**: Do not narrate what you see unless asked. If the user is just "Observing," stay silent.
-4. **Contextual Awareness**: When asked (e.g., "What's that?"), provide a concise, factual answer based on recent visual frames.
-
-DIRECTOR COACHING:
-If camera framing is poor (e.g., "Tilt up"), provide BRIEF directional hints. Otherwise, minimize speech.
-
-Personality: Professional, concise, minimalist. No fillers.`
-                                    }]
-                                },
-                                tools: [
-                                    {
-                                        functionDeclarations: [
-                                            {
-                                                name: "add_allergy",
-                                                description: "Adds a new allergy to the user's profile.",
-                                                parameters: {
-                                                    type: "object",
-                                                    properties: {
-                                                        allergy: {
-                                                            type: "string",
-                                                            description: "The name of the allergy to add."
-                                                        }
-                                                    },
-                                                    required: ["allergy"]
-                                                }
-                                            },
-                                            {
-                                                name: "update_accessible_preference",
-                                                description: "Updates a user's accessibility preference.",
-                                                parameters: {
-                                                    type: "object",
-                                                    properties: {
-                                                        preference: {
-                                                            type: "string",
-                                                            description: "The name of the preference to update (e.g., 'concise_answers', 'verbose_descriptions')."
-                                                        },
-                                                        value: {
-                                                            type: "boolean",
-                                                            description: "The new value for the preference (true or false)."
-                                                        }
-                                                    },
-                                                    required: ["preference", "value"]
-                                                }
-                                            },
-/* LEGACY REMOVED: toggle_hands_free tool */
-                                            {
-                                                name: "save_fact",
-                                                description: "Saves a general fact or important information about the user.",
-                                                parameters: {
-                                                    type: "object",
-                                                    properties: {
-                                                        fact: {
-                                                            type: "string",
-                                                            description: "The fact or information to save."
-                                                        }
-                                                    },
-                                                    required: ["fact"]
-                                                }
-                                            }
-                                        ]
-                                    }
-                                ]
-                            }
-                        };
-                        this.ws.send(JSON.stringify(setupMessage));
-                        this.isStable = true;
-                        this.flushMessageQueue();
-                        resolve();
-                    } else if (this.ws?.readyState === WebSocket.CONNECTING) {
-                        console.warn("WebSocket still CONNECTING in onopen. Retrying in 50ms...");
-                        setTimeout(sendSetup, 50);
-                    } else {
-                        reject(new Error("WebSocket closed before setup could be sent"));
-                    }
-                };
-
-                sendSetup();
-            };
-
-            this.ws.onmessage = async (event) => {
-                let text: string | null = null;
-                if (event.data instanceof Blob) {
-                    text = await event.data.text();
-                } else if (typeof event.data === 'string') {
-                    text = event.data;
-                } else {
-                    console.warn('LiveAPIClient: Non-text message received, ignoring.');
-                    return;
-                }
-
-                // DEBUG: Log every raw message from server
-                console.log('[DEBUG] Raw server message:', text.substring(0, 500));
-                let data: any;
-                try {
-                    data = JSON.parse(text);
-                } catch (err) {
-                    console.warn('LiveAPIClient: Non-JSON message from server, ignoring.', err);
-                    return;
-                }
-                this.handleServerMessage(data);
-            };
-
-            this.ws.onclose = (event) => {
-                console.log('LiveAPIClient: Disconnected from Aura Proxy', event.code, event.reason);
-                this.isConnected = false;
-
-                // Attempt auto-reconnect for non-intentional disconnections
-                if (this.shouldReconnect && event.code !== 1000) {
-                    this.attemptReconnect();
-                } else {
-                    this.onDisconnectHandler(event.reason || `Code: ${event.code}`);
-                }
-            };
-
-            this.ws.onerror = (err) => {
-                console.error('WebSocket Error:', err);
-                // Don't reject if we're reconnecting — onclose will handle it
-                if (this.reconnectAttempts === 0) {
-                    reject(err);
-                }
-            };
-        });
-    }
-
-    /**
-     * Attempts to reconnect with exponential backoff and jitter.
-     */
     private async attemptReconnect() {
         if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-            console.error('LiveAPIClient: Max reconnection attempts reached');
             this.onDisconnectHandler('Max reconnection attempts reached');
             return;
         }
-
-        const delay = Math.min(
-            this.maxDelay,
-            this.baseDelay * Math.pow(2, this.reconnectAttempts)
-        ) + Math.random() * this.baseDelay; // Jitter
-
         this.reconnectAttempts++;
-        console.log(`LiveAPIClient: Reconnecting in ${Math.round(delay)}ms (attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
+        const delay = Math.min(30000, 1000 * Math.pow(2, this.reconnectAttempts));
+        console.log(`LiveAPIClient: Reconnecting in ${delay}ms...`);
         this.onReconnectingHandler(this.reconnectAttempts);
-
         await new Promise(r => setTimeout(r, delay));
-
         try {
-            // Retrieve JWT via official Supabase helper
-            let token: string | undefined = undefined;
-            try {
-                const { data: { session }, error } = await supabase.auth.getSession();
-                if (error) {
-                    console.warn('Could not retrieve session for reconnect:', error.message);
-                }
-                token = session?.access_token;
-            } catch (e) {
-                console.warn('Could not retrieve session token for reconnect');
-            }
-
-            await this.connect(token);
-            console.log('LiveAPIClient: Reconnection successful');
+            await this.connect();
             this.onReconnectedHandler();
-        } catch (err) {
-            console.error('LiveAPIClient: Reconnection failed:', err);
-            // onclose will fire again and trigger another attemptReconnect
+        } catch (e) {
+            // Re-attempting is handled by connect's own error or next onclose
         }
     }
 
-    /**
-     * Handles incoming messages from the Gemini Live API.
-     */
-    private async handleServerMessage(message: any) {
-        // Handle Setup Complete (Resilient to casing)
-        if (message.setupComplete || message.setup_complete) {
-            console.log('Gemini Live Session Initialized');
+    private handleServerMessage(message: any) {
+        // Interruption
+        if (message.serverContent?.interrupted) {
+            this.onInterruptedHandler();
             return;
         }
 
-        // Handle GoAway — pre-termination warning
-        const goAway = message.goAway || message.go_away;
-        if (goAway) {
-            const timeLeft = goAway.timeLeft || goAway.time_left || 0;
-            console.warn('Gemini GoAway received. Time left:', timeLeft);
-            this.onGoAwayHandler(timeLeft);
-            return;
-        }
-
-        // Handle Session Resumption Token updates
-        const sessionUpdate = message.sessionResumptionUpdate || message.session_resumption_update;
-        if (sessionUpdate) {
-            const token = sessionUpdate.newHandle || sessionUpdate.token || sessionUpdate.handle;
-            if (token) {
-                this.resumptionToken = token;
-                console.log('LiveAPIClient: Session resumption token updated:', token.substring(0, 8) + '...');
-            }
-            return;
-        }
-
-        // --- TOOL CALL HANDLING (2026 Resiliency) ---
-        // Handle standalone top-level toolCall (Gemini sometimes sends this outside serverContent)
-        const topLevelToolCall = message.toolCall || message.tool_call;
-        if (topLevelToolCall && topLevelToolCall.functionCalls) {
-            for (const fc of topLevelToolCall.functionCalls) {
-                await this.executeFunctionCall(fc);
-            }
-            return;
-        }
-
-        // Handle Server Content (Resilient to casing)
-        const serverContent = message.serverContent || message.server_content;
-        if (serverContent) {
-            // Handle interruption — user started speaking while AI was responding
-            if (serverContent.interrupted) {
-                console.log('Gemini interrupted. Clearing local audio queue.');
-                this.onInterruptedHandler();
-                return;
-            }
-
-            const modelTurn = serverContent.modelTurn || serverContent.model_turn;
-            if (modelTurn && modelTurn.parts) {
-                for (const part of modelTurn.parts) {
-                    // Handle Tool/Function Calls inside modelTurn
-                    const functionCall = part.functionCall || part.function_call;
-                    if (functionCall) {
-                        await this.executeFunctionCall(functionCall);
+        // Content & Audio
+        const modelTurn = message.serverContent?.modelTurn;
+        if (modelTurn?.parts) {
+            for (const part of modelTurn.parts) {
+                if (part.text) this.onContentHandler(part.text);
+                
+                if (part.inlineData && part.inlineData.mimeType.startsWith('audio')) {
+                    const binaryString = atob(part.inlineData.data);
+                    const bytes = new Uint8Array(binaryString.length);
+                    for (let i = 0; i < binaryString.length; i++) {
+                        bytes[i] = binaryString.charCodeAt(i);
                     }
+                    this.onAudioHandler(new Int16Array(bytes.buffer));
+                }
 
-                    if (part.text) {
-                        this.onContentHandler(part.text);
-                    }
-                    const inlineData = part.inlineData || part.inline_data;
-                    const mime = inlineData?.mimeType || inlineData?.mime_type || '';
-                    if (inlineData && mime.startsWith('audio')) {
-                        // Convert base64 audio to Int16Array
-                        const binaryString = atob(inlineData.data);
-                        const len = binaryString.length;
-                        const bytes = new Uint8Array(len);
-                        for (let i = 0; i < len; i++) {
-                            bytes[i] = binaryString.charCodeAt(i);
-                        }
-                        const pcm16 = new Int16Array(bytes.buffer);
-                        console.log('[DEBUG] Audio chunk decoded, samples:', pcm16.length);
-                        this.onAudioHandler(pcm16);
-                    }
+                if (part.functionCall) {
+                    this.executeFunctionCall(part.functionCall);
                 }
             }
+        }
 
-            // Handle server-side turnComplete — model finished responding
-            if (serverContent.turnComplete || serverContent.turn_complete) {
-                console.log('Gemini turn complete');
-                this.onTurnCompleteHandler();
+        // Top-level Tool Call (SDK specific relay)
+        if (message.toolCall?.functionCalls) {
+            for (const fc of message.toolCall.functionCalls) {
+                this.executeFunctionCall(fc);
             }
         }
 
-        // Handle Audio Transcription (User input)
-        const transcription = message.transcription || message.audio_transcription;
-        if (transcription && (transcription.text || transcription.transcript)) {
-            const transcript = transcription.text || transcription.transcript;
-            console.log('User transcript received:', transcript);
+        // Transcription
+        const transcript = message.serverContent?.inputTranscription?.text || message.transcription?.text;
+        if (transcript) {
             this.onTranscriptionHandler(transcript);
         }
+
+        // Turn complete
+        if (message.serverContent?.turnComplete) {
+            this.onTurnCompleteHandler();
+        }
+
+        // Resumption Token
+        const token = message.sessionResumptionUpdate?.newHandle;
+        if (token) {
+            this.resumptionToken = token;
+        }
     }
 
-    /**
-     * Executes a tool function request from the model.
-     */
-    private async executeFunctionCall(functionCall: any) {
-        const name = functionCall.name;
-        const args = functionCall.args;
-        const callId = functionCall.id || "0";
-
-        console.log(`Gemini requested tool: ${name}`, args);
-        
+    private async executeFunctionCall(fc: any) {
+        const { name, args, id } = fc;
+        console.log(`Tool Call: ${name}`, args);
         try {
             const { data: { user } } = await supabase.auth.getUser();
-            if (!user) throw new Error("User not authenticated");
+            if (!user) return;
 
             if (name === 'add_allergy') {
-                const { allergy } = args;
                 await supabase.from('ai_memory').insert({ 
-                    user_id: user.id,
-                    content: `Allergy: ${allergy}`,
-                    category: 'allergy'
+                    user_id: user.id, 
+                    content: `Allergy: ${args.allergy}`, 
+                    category: 'allergy' 
                 });
-                this.sendToolResponse(name, callId, { result: 'Allergy saved.' });
-            } else if (name === 'update_accessible_preference') {
-                const { preference, value } = args;
-                await supabase.from('accessibility_preferences').upsert({
-                    user_id: user.id,
-                    [preference]: value,
-                    updated_at: new Date().toISOString()
-                });
-                this.sendToolResponse(name, callId, { result: 'Preference updated.' });
+                this.sendToolResponse(name, id, { result: 'Saved' });
             } else if (name === 'save_fact') {
-                const { fact } = args;
                 await supabase.from('ai_memory').insert({ 
-                    user_id: user.id,
-                    content: fact,
-                    category: 'fact'
+                    user_id: user.id, 
+                    content: args.fact, 
+                    category: 'fact' 
                 });
-                this.sendToolResponse(name, callId, { result: 'Fact saved.' });
-/* LEGACY REMOVED: toggle_hands_free handler */
-        } catch (err: any) {
-            console.error(`Tool execution failed (${name}):`, err);
-            this.sendToolResponse(name, callId, { status: "error", message: err.message });
-        }
-    }
-
-    /**
-     * Sends a video frame (base64) to Gemini.
-     */
-    sendVideoFrame(base64Frame: string) {
-        if (!this.isConnected || !this.ws) return;
-
-        const message = {
-            realtimeInput: {
-                mediaChunks: [
-                    {
-                        mimeType: "image/jpeg",
-                        data: base64Frame
-                    }
-                ]
+                this.sendToolResponse(name, id, { result: 'Saved' });
             }
-        };
-
-        if (!this.isStable) {
-            this.messageQueue.push(message);
-            return;
+        } catch (e) {
+            console.error("Tool execution error", e);
         }
-
-        console.log('[DEBUG] Sending video frame, size:', base64Frame.length);
-        this.ws.send(JSON.stringify(message));
     }
 
-    /**
-     * Sends audio data (PCM16) to Gemini.
-     */
-    sendAudioChunk(pcm16Data: Int16Array) {
-        if (!this.isConnected || !this.ws) return;
+    sendVideoFrame(base64Frame: string) {
+        if (!this.session || !this.isConnected) return;
+        this.session.sendRealtimeInput({
+            mediaChunks: [{
+                mimeType: "image/jpeg",
+                data: base64Frame
+            }]
+        });
+    }
 
-        // Convert Int16Array to Base64
+    sendAudioChunk(pcm16Data: Int16Array) {
+        if (!this.session || !this.isConnected) return;
+        // The SDK handles binary Data or base64. 
+        // We'll use the SDK's expected format which is a base64 string in mediaChunks 
+        // or a Blob if we want the SDK to handle conversion.
         const uint8 = new Uint8Array(pcm16Data.buffer);
         let binary = '';
-        const len = uint8.byteLength;
-        for (let i = 0; i < len; i++) {
+        for (let i = 0; i < uint8.byteLength; i++) {
             binary += String.fromCharCode(uint8[i]);
         }
-        const base64Audio = btoa(binary);
-
-        const message = {
-            realtimeInput: {
-                mediaChunks: [
-                    {
-                        mimeType: "audio/pcm;rate=16000",
-                        data: base64Audio
-                    }
-                ]
-            }
-        };
-
-        if (!this.isStable) {
-            this.messageQueue.push(message);
-            return;
-        }
-
-        console.log('[DEBUG] Sending audio chunk, samples:', pcm16Data.length, 'base64 len:', base64Audio.length);
-        this.ws.send(JSON.stringify(message));
+        this.session.sendRealtimeInput({
+            mediaChunks: [{
+                mimeType: "audio/pcm;rate=16000",
+                data: btoa(binary)
+            }]
+        });
     }
 
-    /**
-     * Signals to Gemini that the user's turn is complete.
-     * This triggers the model to start generating a response.
-     */
     sendTurnComplete() {
-        if (!this.isConnected || !this.ws) return;
-        const message = {
-            clientContent: {
-                turnComplete: true
-            }
-        };
-        console.log('[DEBUG] Sending turnComplete:', JSON.stringify(message));
-        this.ws.send(JSON.stringify(message));
-        console.log('LiveAPIClient: Sent turnComplete signal');
+        if (!this.session || !this.isConnected) return;
+        this.session.sendClientContent({ turnComplete: true });
     }
 
-    /**
-     * Sends a function execution response back to Gemini to complete a tool call loop.
-     */
-    private sendToolResponse(name: string, id: string, response: object) {
-        if (!this.isConnected || !this.ws) return;
-        
-        const message = {
-            toolResponse: {
-                functionResponses: [
-                    {
-                        name,
-                        id,
-                        response
-                    }
-                ]
-            }
-        };
-        
-        console.log('[DEBUG] Sending toolResponse:', JSON.stringify(message));
-        this.ws.send(JSON.stringify(message));
-        
-        // After tool response, we re-enter stable state
-        this.isStable = true;
-        this.flushMessageQueue();
+    private sendToolResponse(name: string, id: string, response: any) {
+        if (!this.session || !this.isConnected) return;
+        this.session.sendToolResponse({
+            functionResponses: [{ name, id, response }]
+        });
     }
 
     private flushMessageQueue() {
-        if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
         while (this.messageQueue.length > 0) {
             const msg = this.messageQueue.shift();
-            this.ws.send(JSON.stringify(msg));
+            // In SDK mode, we call session methods
+            if (msg.realtimeInput) this.session.sendRealtimeInput(msg.realtimeInput);
+            if (msg.clientContent) this.session.sendClientContent(msg.clientContent);
         }
     }
 
-    // ── Event Handler Registration ──
-
-    onContent(handler: (text: string) => void) {
-        this.onContentHandler = handler;
-    }
-
-    onAudio(handler: (data: Int16Array) => void) {
-        this.onAudioHandler = handler;
-    }
-
-    onDisconnect(handler: (reason: string) => void) {
-        this.onDisconnectHandler = handler;
-    }
-
-    onInterrupted(handler: () => void) {
-        this.onInterruptedHandler = handler;
-    }
-
-    onGoAway(handler: (timeLeft: number) => void) {
-        this.onGoAwayHandler = handler;
-    }
-
-    onTurnComplete(handler: () => void) {
-        this.onTurnCompleteHandler = handler;
-    }
-
-    onHandsFreeToggle(handler: (enabled: boolean) => void) {
-        this.onHandsFreeToggleHandler = handler;
-    }
-
-    onTranscription(handler: (text: string) => void) {
-        this.onTranscriptionHandler = handler;
-    }
-
-    onReconnecting(handler: (attempt: number) => void) {
-        this.onReconnectingHandler = handler;
-    }
-
-    onReconnected(handler: () => void) {
-        this.onReconnectedHandler = handler;
-    }
-
-    /**
-     * Disconnects the session intentionally (no auto-reconnect).
-     */
     disconnect() {
         this.shouldReconnect = false;
-        this.ws?.close(1000, 'Client disconnect');
+        if (this.session) this.session.close();
         this.isConnected = false;
     }
+
+    // Event registrations (keep same for API compatibility)
+    onContent(h: any) { this.onContentHandler = h; }
+    onAudio(h: any) { this.onAudioHandler = h; }
+    onDisconnect(h: any) { this.onDisconnectHandler = h; }
+    onInterrupted(h: any) { this.onInterruptedHandler = h; }
+    onGoAway(h: any) { this.onGoAwayHandler = h; }
+    onTurnComplete(h: any) { this.onTurnCompleteHandler = h; }
+    onTranscription(h: any) { this.onTranscriptionHandler = h; }
+    onReconnecting(h: any) { this.onReconnectingHandler = h; }
+    onReconnected(h: any) { this.onReconnectedHandler = h; }
 }

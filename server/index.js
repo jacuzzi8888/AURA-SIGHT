@@ -1,9 +1,8 @@
 import express from 'express';
-import { WebSocketServer, WebSocket } from 'ws';
+import { WebSocketServer } from 'ws';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import { SecretManagerServiceClient } from '@google-cloud/secret-manager';
-import { GoogleAuth } from 'google-auth-library';
+import { GoogleGenAI } from '@google/genai';
 import { createClient } from '@supabase/supabase-js';
 
 dotenv.config();
@@ -25,51 +24,47 @@ if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
 }
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-let secretClient = null;
 
-/**
- * Retrieves an OAuth2 Access Token for Vertex AI.
- * Uses Service Account credentials from the environment.
- */
-async function getAccessToken() {
-    try {
-        const auth = new GoogleAuth({
-            scopes: 'https://www.googleapis.com/auth/cloud-platform',
-        });
-        const client = await auth.getClient();
-        const token = await client.getAccessToken();
-        return token.token;
-    } catch (err) {
-        console.error("Failed to retrieve Access Token:", err);
-        return null;
-    }
-}
+// Initialize Google Gen AI SDK for Vertex AI
+const project = process.env.GOOGLE_CLOUD_PROJECT || 'ocellus-488718';
+const location = 'us-central1';
+
+const ai = new GoogleGenAI({
+    vertexai: true,
+    project: project,
+    location: location,
+});
 
 const server = app.listen(PORT, () => {
     console.log(`Aura Proxy listening on port ${PORT}`);
 });
 
-const wss = new WebSocketServer({ server });
+// Create WebSocket server. SDK might connect to different paths, so we handle all paths.
+const wss = new WebSocketServer({ noServer: true });
+
+server.on('upgrade', (request, socket, head) => {
+    wss.handleUpgrade(request, socket, head, (ws) => {
+        wss.emit('connection', ws, request);
+    });
+});
 
 wss.on('connection', async (ws, req) => {
-    console.log('New client connection request to Aura Proxy');
+    console.log(`New client connection to: ${req.url}`);
 
-    // ── Proxy Authentication (Supabase Asymmetric JWT) ──
-    // The client sends the JWT via the subprotocol header (e.g., ["token", "eyJhbG..."])
+    // ── Proxy Authentication (Supabase JWT) ──
     const authHeader = req.headers['sec-websocket-protocol'];
-    let clientJwt = null;
+    const urlParams = new URL(req.url, `http://${req.headers.host}`).searchParams;
+    let clientJwt = urlParams.get('key') || urlParams.get('jwt');
 
-    if (authHeader) {
-        // The header can be a comma-separated string if multiple protocols are sent 
-        // e.g., 'jwt, eyJhbGci...'
+    if (!clientJwt && authHeader) {
         const protocols = authHeader.split(',').map(p => p.trim());
-        if (protocols.length === 2 && protocols[0] === 'jwt') {
+        if (protocols.length >= 2 && protocols[0] === 'jwt') {
             clientJwt = protocols[1];
         } else if (protocols.length === 1 && protocols[0].length > 20) {
-            // Fallback if client just sent the token as the only protocol
             clientJwt = protocols[0];
         }
     }
+
 
     if (!clientJwt) {
         console.warn('Client rejected: No JWT found in sec-websocket-protocol');
@@ -77,7 +72,6 @@ wss.on('connection', async (ws, req) => {
         return;
     }
 
-    // Verify the JWT locally with Supabase
     const { data: { user }, error: authError } = await supabase.auth.getUser(clientJwt);
     
     if (authError || !user) {
@@ -88,17 +82,15 @@ wss.on('connection', async (ws, req) => {
     
     console.log(`Authenticated user: ${user.id}`);
 
-    // ── Context Injection (Phase 5) ──
+    // ── Fetch User Context (Preferences & Memory) ──
     let userContextStr = "";
     try {
-        // Fetch Preferences
         const { data: prefs } = await supabase
             .from('accessibility_preferences')
             .select('speech_rate, high_contrast_mode, allergies')
             .eq('user_id', user.id)
             .single();
 
-        // Fetch AI Memory (last 10 context points for token economy)
         const { data: memories } = await supabase
             .from('ai_memory')
             .select('memory_type, content')
@@ -106,148 +98,123 @@ wss.on('connection', async (ws, req) => {
             .order('created_at', { ascending: false })
             .limit(10);
 
-        userContextStr += "\n-- PREFERENCES --\n";
+        userContextStr += "\n-- USER PREFERENCES --\n";
         if (prefs) {
-            userContextStr += `Speech Rate Preference: ${prefs.speech_rate}\n`;
-            if (prefs.allergies && prefs.allergies.length > 0) {
+            userContextStr += `Speech Rate: ${prefs.speech_rate}\n`;
+            if (prefs.allergies?.length > 0) {
                 userContextStr += `CRITICAL ALLERGIES: ${prefs.allergies.join(', ')}\n`;
             }
-        } else {
-            userContextStr += "No explicit preferences set.\n";
         }
-
-        userContextStr += "\n-- LONG-TERM MEMORY --\n";
-        if (memories && memories.length > 0) {
-            memories.forEach(m => {
-                userContextStr += `[${m.memory_type.toUpperCase()}]: ${m.content}\n`;
-            });
-        } else {
-            userContextStr += "No previous context.\n";
+        userContextStr += "\n-- AI MEMORY --\n";
+        if (memories?.length > 0) {
+            memories.forEach(m => userContextStr += `[${m.memory_type}]: ${m.content}\n`);
         }
     } catch (e) {
-        console.error("Failed to fetch Context/Memory from Supabase:", e);
+        console.error("Context fetch failed:", e);
     }
 
-    const accessToken = await getAccessToken();
-
-    if (!accessToken) {
-        console.error('CRITICAL: Access Token is missing. Proxy cannot function.');
-        ws.close(1011, 'Internal Server Error: Auth Failed');
-        return;
-    }
-
-    // Vertex AI Multimodal Live API WebSocket endpoint
-    const project = process.env.GOOGLE_CLOUD_PROJECT || 'ocellus-488718';
-    const location = 'us-central1';
-    const googleUrl = `wss://${location}-aiplatform.googleapis.com/ws/google.cloud.aiplatform.v1beta1.LlmBidiService/BidiGenerateContent`;
-
-    const googleWs = new WebSocket(googleUrl, {
-        headers: {
-            'Authorization': `Bearer ${accessToken}`
-        }
-    });
-
-    // ── Application-Level Heartbeat ──
-    // Browser WebSocket API cannot send native pings.
-    // We send server-side pings to keep the connection alive through load balancers.
-    let heartbeatInterval = null;
-
-    // Proxy messages from Google back to the Client
-    googleWs.on('message', (data, isBinary) => {
-        if (ws.readyState === WebSocket.OPEN) {
-            ws.send(data, { binary: isBinary });
-        }
-    });
-
+    // ── Initialize Multimodal Live Session via SDK ──
+    let session = null;
     let hasSentSetup = false;
-    const pendingClientMessages = [];
 
-    const sendToGoogle = (data, isBinary) => {
-        if (googleWs.readyState !== WebSocket.OPEN) {
-            pendingClientMessages.push({ data, isBinary });
-            return;
-        }
-
-        if (!hasSentSetup && !isBinary) {
-            try {
-                const msgStr = data.toString();
-                const msgJson = JSON.parse(msgStr);
-                
-                if (msgJson.setup && msgJson.setup.systemInstruction) {
-                    // Inject our secure Supabase context into the prompt
-                    console.log('Injecting Supabase Context into Gemini Setup...');
-                    msgJson.setup.systemInstruction.parts[0].text += `\n\n${userContextStr}`;
-                    googleWs.send(JSON.stringify(msgJson), { binary: false });
-                    hasSentSetup = true;
-                    return; // Successfully intercepted and injected
+    ws.on('message', async (data, isBinary) => {
+        try {
+            if (isBinary) {
+                if (session) {
+                    session.sendRealtimeInput({
+                        audio: data
+                    });
                 }
-            } catch (e) {
-                // Not JSON or failed to parse, pass through normally
-                console.error('Error parsing client message for setup interception:', e);
+                return;
             }
+
+            const msg = JSON.parse(data.toString());
+
+            // Handle Setup Interception
+            // The SDK might send 'setup' as the first message
+            if (msg.setup && !hasSentSetup) {
+                console.log('Intercepting SDK Setup for Context Injection...');
+                
+                const baseInstructions = msg.setup.systemInstruction?.parts?.[0]?.text || "";
+                const finalInstructions = `${baseInstructions}\n\n${userContextStr}`;
+
+                // Extract model ID (ensure it includes the full resource path for Vertex)
+                let modelId = msg.setup.model || 'gemini-2.0-flash-live-preview-01-21';
+                if (!modelId.includes('/')) {
+                    modelId = `projects/${project}/locations/${location}/publishers/google/models/${modelId}`;
+                }
+
+                try {
+                    session = await ai.live.connect({
+                        model: modelId,
+                        config: {
+                            systemInstruction: {
+                                parts: [{ text: finalInstructions }]
+                            },
+                            generationConfig: msg.setup.generationConfig,
+                            tools: msg.setup.tools,
+                            responseModalities: msg.setup.generationConfig?.responseModalities || ["audio"]
+                        },
+                        callbacks: {
+                            onopen: () => {
+                                console.log('SDK Proxy: Upstream Connected');
+                                if (ws.readyState === WebSocket.OPEN) {
+                                    // Mirror the SDK's setupComplete message
+                                    ws.send(JSON.stringify({ setupComplete: {} }));
+                                }
+                            },
+                            onmessage: (serverMsg) => {
+                                if (ws.readyState === ws.OPEN) {
+                                    ws.send(JSON.stringify(serverMsg));
+                                }
+                            },
+                            onerror: (err) => {
+                                console.error('SDK Proxy: Upstream Error', err);
+                                if (ws.readyState === ws.OPEN) {
+                                    ws.send(JSON.stringify({ error: err.message || 'Upstream connection error' }));
+                                }
+                            },
+                            onclose: () => {
+                                console.log('SDK Proxy: Upstream Closed');
+                                ws.close();
+                            }
+                        }
+                    });
+                    hasSentSetup = true;
+                } catch (connErr) {
+                    console.error('SDK Proxy: Connection failed', connErr);
+                    ws.close(1011, 'Upstream connection failed');
+                }
+                return;
+            }
+
+            // Route standard client content to the active session
+            if (session) {
+                if (msg.clientContent) {
+                    session.sendClientContent(msg.clientContent);
+                } else if (msg.realtimeInput) {
+                    session.sendRealtimeInput(msg.realtimeInput);
+                } else if (msg.toolResponse) {
+                    session.sendToolResponse(msg.toolResponse);
+                }
+            }
+
+        } catch (e) {
+            console.error('SDK Proxy: Message dispatch error:', e);
         }
-        
-        // Default pass-through behavior
-        googleWs.send(data, { binary: isBinary });
-    };
-
-    // Proxy messages from the Client to Google
-    ws.on('message', (data, isBinary) => {
-        sendToGoogle(data, isBinary);
-    });
-
-    googleWs.on('open', () => {
-        console.log('Successfully bridged to Google Multimodal Live API');
-
-        // We can optionally intercept the initial `setup` message from the client 
-        // to inject our secure context, but since the frontend sends its own setup, 
-        // a more robust approach (for the hackathon) is having the proxy securely 
-        // *construct* the setup, or inject the instructions here. 
-        // Wait, the client sends its own `setup`. We must intercept it.
-
-        // Flush any queued client messages now that the upstream is open
-        while (pendingClientMessages.length > 0) {
-            const msg = pendingClientMessages.shift();
-            sendToGoogle(msg.data, msg.isBinary);
-        }
-
-        // Start heartbeat: ping every 30 seconds to keep connection alive
-        heartbeatInterval = setInterval(() => {
-            if (ws.readyState === WebSocket.OPEN) {
-                ws.ping();
-            }
-            if (googleWs.readyState === WebSocket.OPEN) {
-                googleWs.ping();
-            }
-        }, 30000);
-    });
-
-    googleWs.on('close', (code, reason) => {
-        console.log(`Google connection closed: ${code} - ${reason}`);
-        if (heartbeatInterval) clearInterval(heartbeatInterval);
-        ws.close(code, reason);
     });
 
     ws.on('close', () => {
-        console.log('Client session ended. Terminating Google bridge.');
-        if (heartbeatInterval) clearInterval(heartbeatInterval);
-        googleWs.close();
-    });
-
-    googleWs.on('error', (err) => {
-        console.error('Google WebSocket error:', err);
-        if (ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({ error: 'Upstream connection error', code: 'UPSTREAM_ERROR' }));
-        }
+        console.log('Client disconnected');
+        if (session) session.close();
     });
 
     ws.on('error', (err) => {
-        console.error('Client WebSocket error:', err);
-        googleWs.close();
+        console.error('Client socket error:', err);
+        if (session) session.close();
     });
+});
 
-    // Handle pong responses (for connection health monitoring)
-    ws.on('pong', () => {
-        // Client is alive
+ent is alive
     });
 });
