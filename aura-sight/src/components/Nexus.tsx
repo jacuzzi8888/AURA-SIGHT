@@ -69,6 +69,8 @@ export const Nexus: React.FC<NexusProps> = ({
             setIsPressing(false);
             setPressProgress(0);
         }, duration);
+    };
+
     const endPress = () => {
         // Hold-to-Scan logic: Releasing the hold transition to 'Watching'
         if (status === 'recording') {
