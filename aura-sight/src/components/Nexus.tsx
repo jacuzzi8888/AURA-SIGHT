@@ -11,7 +11,6 @@ export interface NexusProps {
     readonly status: AuraStatus;
     readonly directorMessage: string | null;
     readonly onStartRecording: () => void;
-    readonly onReleaseRecording: () => void; // Used for "Watch" mode
     readonly onStopRecording: () => void;
     readonly videoStream?: MediaStream | null;
     readonly cameraEnabled?: boolean;
@@ -22,7 +21,6 @@ export const Nexus: React.FC<NexusProps> = ({
     status,
     directorMessage,
     onStartRecording,
-    onReleaseRecording,
     onStopRecording,
     videoStream,
     cameraEnabled = true,
@@ -283,6 +281,7 @@ export const Nexus: React.FC<NexusProps> = ({
             )}
 
             {/* Sub-label (Recording) */}
+            {status === 'recording' && (
                 <div role="status" aria-live="polite" className="absolute bottom-32 text-center z-10 animate-in slide-in-from-bottom flex flex-col items-center gap-1">
                     <span className="text-red-400 text-xs font-bold uppercase tracking-widest bg-red-500/10 px-3 py-1 rounded-full border border-red-400/30">
                         ● Recording

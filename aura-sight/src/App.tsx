@@ -264,6 +264,14 @@ function App() {
     if ('vibrate' in navigator) navigator.vibrate([50, 80, 50])
   }, [stopHeartbeat])
 
+  const toggleCamera = useCallback(() => {
+    const newState = !cameraEnabled
+    setCameraEnabled(newState)
+    if (mediaManager.current) {
+      mediaManager.current.toggleVideo(newState)
+    }
+  }, [cameraEnabled])
+
   const cycleCamera = useCallback(async () => {
     if (!mediaManager.current) mediaManager.current = new MediaManager()
     
@@ -297,17 +305,7 @@ function App() {
     }
   }, [cameras, currentCameraIndex, isEngaged])
 
-  const toggleCamera = useCallback(() => {
-    const newState = !cameraEnabled
-    setCameraEnabled(newState)
-    if (mediaManager.current) {
-      mediaManager.current.toggleVideo(newState)
-    }
-  }, [cameraEnabled])
 
-  const releaseRecording = useCallback(() => {
-    // One-Shot Direct Intent: Releasing does nothing, stay in recording state
-  }, [])
 
   if (isLoadingSession) {
     return (
@@ -362,7 +360,6 @@ function App() {
               status={status}
               directorMessage={directorMessage}
               onStartRecording={startRecording}
-              onReleaseRecording={releaseRecording}
               onStopRecording={stopRecording}
               videoStream={videoStream}
               cameraEnabled={cameraEnabled}
