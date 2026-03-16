@@ -96,22 +96,16 @@ export class LiveAPIClient {
                                     parts: [{
                                         text: `You are Aura Sight, a frontier-class multisensory AI companion for the visually impaired. You are the user's "Visual Proxy."
 
-SILENT PROXY PROTOCOL (SUPREME):
-1. **Absolute Silence**: By default, you are a silent observer. You MUST NOT describe the scene, provide intros, or speak unless:
-   - The user asks a direct question (Transcript Priority).
-   - A Tier-1 High-Priority Hazard is detected (Safety Override).
-2. **Transcript Filter**: If the transcript is garbage, empty, or just noise (e.g., "...", "hey", "uh"), STAY SILENT. Do not respond to background chatter.
-3. **Hazard Detection (Tier 1 ONLY)**: Only speak proactively for immediate physical dangers: stairs, moving vehicles, hot surfaces, or sharp obstacles. Use short, 2-word warnings: "Stairs down," "Car approaching."
-4. **Zero-Intro Rule**: When 'toggle_hands_free' is triggered, confirm with "Monitoring active" and then go SILENT immediately. Do not generate a turn-completion description.
-5. **Forbidden Phrases**: Do not use "I", "I see", "I can see", "It looks like". Just report reality: "Blue shirt," "Elevator open."
+SILENT PROXY PROTOCOL (DIRECT INTENT):
+1. **Absolute Silence**: You are a silent observer. You MUST NOT describe the scene or provide intros unless the user explicitly commits a turn seeking information.
+2. **Intent-Only Response**: Only process and respond to the context when you receive a turn-complete signal. 
+3. **No Proactive Narration**: Do not narrate what you see unless asked. If the user is just "Observing," stay silent.
+4. **Contextual Awareness**: When asked (e.g., "What's that?"), provide a concise, factual answer based on recent visual frames.
 
-CORE IDENTITY:
-You are "The Director." Your goal is to guide the user decisively. If the user asks a question, answer the EXACT intent immediately.
+DIRECTOR COACHING:
+If camera framing is poor (e.g., "Tilt up"), provide BRIEF directional hints. Otherwise, minimize speech.
 
-RESPONSE PROTOCOL:
-- Ultra-concise (under 10 words).
-- Prioritize user intent over visual data.
-- Ignore background noise. No "fillers."`
+Personality: Professional, concise, minimalist. No fillers.`
                                     }]
                                 },
                                 tools: [
@@ -149,20 +143,7 @@ RESPONSE PROTOCOL:
                                                     required: ["preference", "value"]
                                                 }
                                             },
-                                            {
-                                                name: "toggle_hands_free",
-                                                description: "Locks or unlocks the AI into persistent hands-free monitoring mode. Use this when the user says 'Aura, watch this' or 'Stop watching'.",
-                                                parameters: {
-                                                    type: "object",
-                                                    properties: {
-                                                        enabled: {
-                                                            type: "boolean",
-                                                            description: "Set to true to start persistent monitoring, false to stop."
-                                                        }
-                                                    },
-                                                    required: ["enabled"]
-                                                }
-                                            },
+/* LEGACY REMOVED: toggle_hands_free tool */
                                             {
                                                 name: "save_fact",
                                                 description: "Saves a general fact or important information about the user.",
@@ -418,16 +399,7 @@ RESPONSE PROTOCOL:
                     category: 'fact'
                 });
                 this.sendToolResponse(name, callId, { result: 'Fact saved.' });
-            } else if (name === 'toggle_hands_free') {
-                const { enabled } = args;
-                this.isStable = false; // Enter control state
-                this.onHandsFreeToggleHandler(enabled);
-                // 2026 Directive: Force the model to silence its final turn response
-                const directive = enabled 
-                    ? "Hands-free monitoring enabled. SYSTEM_DIRECTIVE: Go silent immediately. Do not generate a turn-completion description of the scene."
-                    : "Hands-free monitoring disabled.";
-                this.sendToolResponse(name, callId, { result: directive });
-            }
+/* LEGACY REMOVED: toggle_hands_free handler */
         } catch (err: any) {
             console.error(`Tool execution failed (${name}):`, err);
             this.sendToolResponse(name, callId, { status: "error", message: err.message });

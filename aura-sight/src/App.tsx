@@ -41,10 +41,10 @@ function App() {
   const [cameraEnabled, setCameraEnabled] = useState<boolean>(true)
   const [cameras, setCameras] = useState<{ id: string; label: string }[]>([])
   const [currentCameraIndex, setCurrentCameraIndex] = useState(0)
-  const [isHandsFree, setIsHandsFree] = useState<boolean>(false)
-  const isHandsFreeRef = useRef<boolean>(false)
-  const wasLastResponseQuestionRef = useRef<boolean>(false)
-  const listeningTimeoutRef = useRef<number | null>(null)
+  /* 
+   * LEGACY REMOVED: 
+   * isHandsFree, wasLastResponseQuestionRef, listeningTimeoutRef 
+   */
 
   const mediaManager = useRef<MediaManager | null>(null)
   const mediaPipeManager = useRef<MediaPipeManager | null>(null)
@@ -146,10 +146,6 @@ function App() {
         setDirectorMessage(text)
         updateStatus('responding')
         stopHeartbeat()
-        
-        // Simple question detection - ends with ?
-        const isQuestion = text.trim().endsWith('?');
-        wasLastResponseQuestionRef.current = isQuestion;
       })
 
       apiClient.current!.onAudio((pcm16) => {
@@ -158,71 +154,8 @@ function App() {
         audioPlayer.current?.queueAudio(pcm16)
       })
 
-      apiClient.current!.onInterrupted(() => {
-        audioPlayer.current?.clearQueue()
-        audioPlayer.current?.resume()
-      })
-
       apiClient.current!.onTurnComplete(async () => {
-        if (isHandsFreeRef.current) {
-          updateStatus('watching');
-          setDirectorMessage('Watching...');
-          startHeartbeat();
-          
-          // Force clear any privacy masks to ensure feed is clear (except for persons)
-          mediaManager.current?.setPrivacyMasks([]);
-
-          // RESTART AUDIO CAPTURE FOR VAD with a robust delay
-          // This allows session resumption / token update to stabilize
-          setTimeout(async () => {
-            try {
-              if (statusRef.current === 'watching') {
-                await mediaManager.current?.startAudioCapture((pcm16) => {
-                  apiClient.current?.sendAudioChunk(pcm16);
-                });
-              }
-            } catch (err) {
-              console.error("Failed to restart audio capture in hands-free mode:", err);
-            }
-          }, 1000); // 2026 Standard: 1s for hardware stabilization
-
-          // Ensure capture interval is running
-          if (!captureInterval.current) {
-            captureInterval.current = window.setInterval(() => {
-              const frame = mediaManager.current?.captureFrame();
-              if (frame && apiClient.current) {
-                apiClient.current.sendVideoFrame(frame);
-              }
-            }, 1000);
-          }
-          return;
-        }
-
-        if (wasLastResponseQuestionRef.current) {
-          // ENTER CONDITIONAL HOT-MIC (LISTENING)
-          updateStatus('listening');
-          setDirectorMessage('Aura is listening...');
-          
-          // Restart audio capture for VAD/Interaction
-          try {
-            await mediaManager.current?.startAudioCapture((pcm16) => {
-              apiClient.current?.sendAudioChunk(pcm16);
-            });
-          } catch (err) {
-            console.error("Failed to start audio capture for listening state:", err);
-          }
-
-          // Set auto-timeout
-          if (listeningTimeoutRef.current) clearTimeout(listeningTimeoutRef.current);
-          listeningTimeoutRef.current = window.setTimeout(() => {
-            if (statusRef.current === 'listening') {
-              cancelSession();
-            }
-          }, 10000); // 10s timeout
-          
-          return;
-        }
-
+        // 2026 Manual Model: We default back to 'idle' after one turn
         updateStatus('idle')
         setDirectorMessage(null)
         stopHeartbeat()
@@ -230,55 +163,11 @@ function App() {
         setVideoStream(null)
       })
 
-      apiClient.current!.onHandsFreeToggle((enabled) => {
-        setIsHandsFree(enabled);
-        isHandsFreeRef.current = enabled;
-        if (enabled) {
-          playEarcon('success');
-          setDirectorMessage('Hands-free active');
-          // VAD is enabled in setup, so AI will respond automatically from now on
-        } else {
-          setDirectorMessage('Hands-free off');
-          playEarcon('stop');
-          // If we're not currently recording/responding, cleanup
-          if (statusRef.current === 'idle') {
-            cancelSession();
-          }
-        }
-      });
-
-      apiClient.current!.onTranscription((transcript) => {
-        if (statusRef.current === 'recording' || statusRef.current === 'listening' || statusRef.current === 'watching') {
-          setDirectorMessage(`"${transcript}"`);
-
-          const lowerTranscript = transcript.toLowerCase();
-          
-          // VOICE COMMANDS: Mode Switching
-          if (lowerTranscript.includes("watch this") || lowerTranscript.includes("be my eyes")) {
-            if (!isHandsFreeRef.current) {
-              setIsHandsFree(true);
-              isHandsFreeRef.current = true;
-              updateStatus('watching'); // Explicitly transition to watching
-              playEarcon('success');
-              setDirectorMessage('Initiating Watch Mode...');
-            }
-          }
-
-          if (lowerTranscript.includes("stop watching") || lowerTranscript.includes("go to sleep")) {
-            cancelSession();
-          }
-        }
-      });
-
       apiClient.current!.onDisconnect(() => {
-        // 2026 Persistence Logic: Only kill media if we are in a terminal state or idle
-        // If the socket is reconnecting, we MUST keep the stream alive for resumption.
         if (statusRef.current !== 'idle' && statusRef.current !== 'error' && statusRef.current !== 'reconnecting') {
            updateStatus('error');
            playEarcon('error');
            setDirectorMessage('Connection lost');
-           
-           // Terminal stop
            mediaManager.current?.stop();
            setVideoStream(null);
            stopHeartbeat();
@@ -291,41 +180,19 @@ function App() {
       });
 
       apiClient.current!.onReconnected(() => {
-        if (isHandsFreeRef.current) {
-          updateStatus('watching');
-          setDirectorMessage('Watching...');
-          
-          // 2026 Resumption: Ensure capture loops are active
-          if (mediaManager.current?.getStream()) {
-             mediaManager.current.startAudioCapture((pcm16) => {
-               apiClient.current?.sendAudioChunk(pcm16);
-             });
-             
-             if (!captureInterval.current) {
-                captureInterval.current = window.setInterval(() => {
-                  const frame = mediaManager.current?.captureFrame();
-                  if (frame && apiClient.current) {
-                    apiClient.current.sendVideoFrame(frame);
-                  }
-                }, 1000);
-             }
-          }
-        } else {
-          updateStatus('idle');
-          setDirectorMessage(null);
-        }
+        updateStatus('idle');
+        setDirectorMessage('Connected');
       });
 
-      // Get JWT for auth via Supabase helper
+      // Auth via Supabase
       let token: string | undefined = undefined;
       try {
         const { data: { session } } = await supabase.auth.getSession()
         token = session?.access_token
       } catch (err) {
-        console.warn('Failed to retrieve Supabase session for auth:', err)
+        console.warn('Auth failed:', err)
       }
 
-      // Re-use connection if already active
       if (!apiClient.current!.isConnected) {
         await apiClient.current!.connect(token)
       }
@@ -340,10 +207,8 @@ function App() {
           apiClient.current.sendVideoFrame(frame)
         }
 
-        // Parallel Edge Detection
         const videoElement = mediaManager.current?.getVideoElement();
         if (videoElement && mediaPipeManager.current) {
-          // Clear previous masks before new detection cycle to avoid sticky blurring
           mediaManager.current?.setPrivacyMasks([]);
           mediaPipeManager.current.detect(videoElement, performance.now());
         }
@@ -359,7 +224,8 @@ function App() {
   }, [startHeartbeat, stopHeartbeat, cameraEnabled])
 
   const stopRecording = useCallback(() => {
-    if (captureInterval.current && !isHandsFreeRef.current) {
+    // 2026 Direct Intent: Tapping commits the turn
+    if (captureInterval.current) {
       clearInterval(captureInterval.current)
       captureInterval.current = null
     }
@@ -380,8 +246,7 @@ function App() {
   const cancelSession = useCallback(() => {
     updateStatus('idle')
     setDirectorMessage(null)
-    setIsHandsFree(false)
-    isHandsFreeRef.current = false
+    /* LEGACY REMOVED: isHandsFree reset */
     stopHeartbeat()
     mediaManager.current?.stop()
     setVideoStream(null)
@@ -433,6 +298,11 @@ function App() {
       mediaManager.current.toggleVideo(newState)
     }
   }, [cameraEnabled])
+
+  const releaseRecording = useCallback(() => {
+    updateStatus('watching')
+    setDirectorMessage('Observing...')
+  }, [])
 
   if (isLoadingSession) {
     return (
@@ -487,11 +357,12 @@ function App() {
               status={status}
               directorMessage={directorMessage}
               onStartRecording={startRecording}
+              onReleaseRecording={releaseRecording}
               onStopRecording={stopRecording}
               onCancel={cancelSession}
               videoStream={videoStream}
               cameraEnabled={cameraEnabled}
-              isHandsFree={isHandsFree}
+              isHandsFree={false}
             />
           </>
         ) : (

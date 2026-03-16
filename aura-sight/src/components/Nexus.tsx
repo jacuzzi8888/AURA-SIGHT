@@ -11,11 +11,12 @@ export interface NexusProps {
     readonly status: AuraStatus;
     readonly directorMessage: string | null;
     readonly onStartRecording: () => void;
+    readonly onReleaseRecording: () => void;
     readonly onStopRecording: () => void;
     readonly onCancel: () => void;
     readonly videoStream?: MediaStream | null;
     readonly cameraEnabled?: boolean;
-    readonly isHandsFree?: boolean;
+    readonly isHandsFree?: boolean; // Kept for prop compatibility but will be forced to false
     readonly className?: string;
 }
 
@@ -39,12 +40,19 @@ export const Nexus: React.FC<NexusProps> = ({
     const isEngaged = status !== 'idle';
 
     const startPress = () => {
-        // If in responding/thinking/error/hands-free state, tap to cancel
-        if (status === 'responding' || status === 'thinking' || status === 'error' || isHandsFree) {
+        // If in responding/thinking/error state, tap to cancel
+        if (status === 'responding' || status === 'thinking' || status === 'error') {
             onCancel();
             return;
         }
-        // If already recording, release stops recording
+
+        // If in 'watching' state, a tap means COMMIT / STOP
+        if (status === 'watching') {
+            onStopRecording();
+            return;
+        }
+
+        // If already recording, release handled separately
         if (status === 'recording') {
             return;
         }
@@ -77,9 +85,9 @@ export const Nexus: React.FC<NexusProps> = ({
     };
 
     const endPress = () => {
-        // If recording, release = stop recording -> thinking
+        // If we were recording and release the hold, we transition to 'Watching'
         if (status === 'recording') {
-            onStopRecording();
+            onReleaseRecording();
             return;
         }
 
@@ -195,8 +203,7 @@ export const Nexus: React.FC<NexusProps> = ({
                         status === 'responding' && "bg-aura-primary scale-100 border-none shadow-[0_0_80px_rgba(19,127,236,0.6)]",
                         status === 'listening' && "bg-aura-amber scale-100 border-none shadow-[0_0_80px_rgba(245,158,11,0.6)] animate-pulse",
                         status === 'watching' && "bg-aura-dark scale-100 border-2 border-aura-cyan shadow-[0_0_80px_rgba(19,127,236,0.6)]",
-                        status === 'error' && "bg-red-800/60 scale-100 border-none shadow-[0_0_40px_rgba(239,68,68,0.3)]",
-                        isHandsFree && status === 'idle' && "bg-aura-cyan/40 scale-100 border-2 border-aura-cyan shadow-[0_0_60px_rgba(19,127,236,0.4)] animate-pulse"
+                        status === 'error' && "bg-red-800/60 scale-100 border-none shadow-[0_0_40px_rgba(239,68,68,0.3)]"
                     )}
                     style={status === 'thinking' ? {
                         background: 'conic-gradient(from 0deg, #F59E0B, #8B5CF6, #3B82F6, #F59E0B)',
@@ -204,10 +211,10 @@ export const Nexus: React.FC<NexusProps> = ({
                     } : undefined}
                 >
                     {/* Live Camera Feed (Masked by rounded-full on parent) */}
-                    {(status === 'recording' || status === 'responding' || status === 'watching' || status === 'reconnecting' || isHandsFree) && videoStream && cameraEnabled && (
+                    {(status === 'recording' || status === 'responding' || status === 'watching' || status === 'reconnecting') && videoStream && cameraEnabled && (
                         <div className={cn(
                             "absolute inset-0 w-full h-full transition-all duration-700",
-                            (status === 'watching' || isHandsFree) ? "opacity-100 scale-100" : "opacity-60"
+                            (status === 'watching') ? "opacity-100 scale-100" : "opacity-60"
                         )}>
                             <video
                                 ref={videoRef}
@@ -216,12 +223,11 @@ export const Nexus: React.FC<NexusProps> = ({
                                 muted
                                 className={cn(
                                     "w-full h-full object-cover pointer-events-none transition-filter duration-700",
-                                    status === 'watching' ? "grayscale-0 contrast-100 saturate-100" : 
-                                    (isHandsFree && status === 'idle' ? "grayscale-[0.3] contrast-125 saturate-150 blur-[2px]" : "mix-blend-screen")
+                                    status === 'watching' ? "grayscale-0 contrast-100 saturate-100" : "mix-blend-screen"
                                 )}
                             />
                             {/* Scanning Line overlay for Hands-Free */}
-                            {(status === 'watching' || (isHandsFree && status === 'idle')) && (
+                            {(status === 'watching') && (
                                 <div className="absolute inset-0 bg-gradient-to-b from-transparent via-aura-cyan/20 to-transparent h-1/2 w-full animate-scan pointer-events-none" />
                             )}
                             
@@ -265,7 +271,7 @@ export const Nexus: React.FC<NexusProps> = ({
             </button>
 
             {/* Instructions (Idle) */}
-            {status === 'idle' && !isHandsFree && (
+            {status === 'idle' && (
                 <div className={cn("absolute bottom-32 text-center z-10 transition-opacity duration-300", isPressing ? "opacity-0" : "opacity-100")}>
                     <p className="text-white text-xl font-medium tracking-tight opacity-90 px-8">
                         Hold to talk to Aura
