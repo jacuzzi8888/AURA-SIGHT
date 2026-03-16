@@ -189,7 +189,7 @@ export const Nexus: React.FC<NexusProps> = ({
                 {/* Inner Circle */}
                 <div
                     className={cn(
-                        "w-[200px] h-[200px] rounded-full transition-all duration-500 flex items-center justify-center overflow-hidden",
+                        "w-[200px] h-[200px] rounded-full transition-all duration-500 flex items-center justify-center overflow-hidden isolation-auto",
                         status === 'idle' && "bg-transparent border-2 border-white/90 scale-95",
                         status === 'recording' && "bg-red-500/80 scale-100 border-none shadow-[0_0_80px_rgba(239,68,68,0.5)] animate-pulse",
                         status === 'thinking' && "scale-100 border-none shadow-[0_0_60px_rgba(245,158,11,0.4)]",
@@ -197,17 +197,23 @@ export const Nexus: React.FC<NexusProps> = ({
                         status === 'watching' && "bg-aura-dark scale-100 border-2 border-aura-cyan shadow-[0_0_80px_rgba(19,127,236,0.6)]",
                         status === 'error' && "bg-red-800/60 scale-100 border-none shadow-[0_0_40px_rgba(239,68,68,0.3)]"
                     )}
-                    style={status === 'thinking' ? {
-                        background: 'conic-gradient(from 0deg, #F59E0B, #8B5CF6, #3B82F6, #F59E0B)',
-                        animation: 'spin 2s linear infinite'
-                    } : undefined}
+                    style={{
+                        ... (status === 'thinking' ? {
+                            background: 'conic-gradient(from 0deg, #F59E0B, #8B5CF6, #3B82F6, #F59E0B)',
+                            animation: 'spin 2s linear infinite'
+                        } : {}),
+                        isolation: 'isolate'
+                    }}
                 >
                     {/* Live Camera Feed (Masked by rounded-full on parent) */}
                     {(status === 'recording' || status === 'responding' || status === 'watching' || status === 'reconnecting') && videoStream && cameraEnabled && (
-                        <div className={cn(
-                            "absolute inset-0 w-full h-full transition-all duration-700",
-                            (status === 'watching') ? "opacity-100 scale-100" : "opacity-60"
-                        )}>
+                        <div 
+                            className={cn(
+                                "absolute inset-0 w-full h-full transition-all duration-700",
+                                (status === 'watching') ? "opacity-100 scale-100" : "opacity-60"
+                            )}
+                            style={{ clipPath: 'circle(50% at 50% 50%)' }}
+                        >
                             <video
                                 ref={videoRef}
                                 autoPlay
