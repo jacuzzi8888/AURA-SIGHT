@@ -32,7 +32,8 @@ The entire system utilizes a single typeface: **Inter** (sans-serif).
 * **Recording**: The inner circle turns red, pulsing with a haptic heartbeat.
 * **Thinking**: The ring displays a conic gradient spinner, indicating cloud processing.
 * **Responding**: The ring turns Electric Cyan, displaying the transcription of the AI's response.
-* **Watching (Hands-Free)**: The Nexus displays a live camera feed with a scanning line overlay in Electric Cyan. This is the persistent monitoring state.
+* **Watching**: Transient state after release; provides visual anchoring.
+* **Completion**: Aura returns to **Idle** and takes all sensors offline after every response to ensure battery efficiency and absolute privacy.
 * **Reconnecting**: Special state for network recovery. The UI shows a "Reconnecting (Attempt X)" message.
 
 ## 7. Accessibility First

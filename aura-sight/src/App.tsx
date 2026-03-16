@@ -166,14 +166,15 @@ function App() {
       })
 
       apiClient.current!.onTurnComplete(async () => {
-        // 2026 Persistent Sentinel: We transition back to 'watching' instead of 'idle'
-        updateStatus('watching')
-        setDirectorMessage('Observing...')
+        // Return to idle after response (One-shot model)
+        updateStatus('idle')
+        setDirectorMessage(null)
         stopHeartbeat()
         
-        // Sentinel Audio Clue: Subtle haptic pulse + high-pitched chime to confirm Aura is still "Watching"
-        if ('vibrate' in navigator) navigator.vibrate([30, 50, 30])
-        playEarcon('start') // Re-using start earcon as a subtle sentinel cue
+        // Full resource disposal
+        mediaManager.current?.stop()
+        setVideoStream(null)
+        apiClient.current?.disconnect()
       })
 
       apiClient.current!.onDisconnect(() => {
