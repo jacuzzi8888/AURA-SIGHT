@@ -148,7 +148,7 @@ wss.on('connection', async (ws, req) => {
                 // Extract model ID and normalize
                 console.log(`SDK Proxy: Intercepted model: ${msg.setup.model}`);
                 
-                let modelId = msg.setup.model || 'gemini-2.5-flash-live-native-audio';
+                let modelId = msg.setup.model || 'gemini-live-2.5-flash-native-audio';
                 
                 // Strip "models/" prefix if it came from AI Studio-style client
                 if (modelId.startsWith('models/')) {

@@ -54,7 +54,7 @@ export class LiveAPIClient {
             }
         });
 
-        const modelId = "gemini-2.5-flash-live-native-audio";
+        const modelId = "gemini-live-2.5-flash-native-audio";
 
         try {
             this.session = await ai.live.connect({
@@ -107,12 +107,18 @@ ONE-SHOT DIRECT INTENT PROTOCOL:
                         this.handleServerMessage(msg);
                     },
                     onclose: (event: any) => {
-                        console.warn('LiveAPIClient: SDK Session Closed', event);
+                        console.log("LiveAPIClient: SDK Session Closed", event);
                         this.isConnected = false;
-                        if (this.shouldReconnect) {
+                        this.onDisconnectHandler(event.reason || "Connection closed");
+                        
+                        // Error 1007: Invalid resource field value (Logical error, stop reconnecting)
+                        if (event.code === 1007) {
+                            console.error("LiveAPIClient: Critical 1007 error. Stopping reconnection.");
+                            this.shouldReconnect = false;
+                        }
+
+                        if (this.shouldReconnect && this.reconnectAttempts < 5) {
                             this.attemptReconnect();
-                        } else {
-                            this.onDisconnectHandler(event.reason || "Connection closed");
                         }
                     },
                     onerror: (err: any) => {

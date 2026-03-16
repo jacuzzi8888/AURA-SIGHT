@@ -261,6 +261,12 @@ function App() {
     playEarcon('thinking')
     setDirectorMessage('Processing...')
     stopHeartbeat()
+    
+    // Physical hardware lockdown
+    if (mediaManager.current) {
+      mediaManager.current.stop()
+    }
+
     if ('vibrate' in navigator) navigator.vibrate([50, 80, 50])
   }, [stopHeartbeat])
 
