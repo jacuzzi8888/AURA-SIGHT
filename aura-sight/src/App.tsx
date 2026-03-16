@@ -178,6 +178,10 @@ function App() {
            setDirectorMessage('Connection lost');
            mediaManager.current?.stop();
            setVideoStream(null);
+           if (captureInterval.current) {
+               clearInterval(captureInterval.current);
+               captureInterval.current = null;
+           }
            stopHeartbeat();
         }
       })
@@ -233,10 +237,7 @@ function App() {
 
   const stopRecording = useCallback(() => {
     // 2026 Direct Intent: Tapping commits the turn
-    if (captureInterval.current) {
-      clearInterval(captureInterval.current)
-      captureInterval.current = null
-    }
+    // We NO LONGER clear the captureInterval here to keep the Sentinel active
 
     const frame = mediaManager.current?.captureFrame()
     if (frame && apiClient.current) {
