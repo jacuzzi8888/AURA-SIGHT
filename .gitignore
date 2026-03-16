@@ -1,0 +1,28 @@
+# Environment Variables (CRITICAL)
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+*.env
+
+# Dependencies
+node_modules/
+jspm_packages/
+
+# Build Outputs
+dist/
+build/
+*.log
+*.txt
+
+# IDE / System
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Legacy / Internal Notes
+internal_notes/
+.git/
+# (Note: .git is usually ignored by default but listed for clarity in multi-repo structures)
