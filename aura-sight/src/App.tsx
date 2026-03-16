@@ -19,7 +19,7 @@ function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
-export type AuraStatus = 'idle' | 'recording' | 'thinking' | 'responding' | 'watching' | 'error' | 'reconnecting'
+export type AuraStatus = 'idle' | 'recording' | 'thinking' | 'responding' | 'error' | 'reconnecting'
 type ViewMode = 'nexus' | 'settings' | 'loading'
 
 function App() {
@@ -171,9 +171,7 @@ function App() {
         setDirectorMessage(null)
         stopHeartbeat()
         
-        // Full resource disposal
-        mediaManager.current?.stop()
-        setVideoStream(null)
+        // Final cleanup
         apiClient.current?.disconnect()
       })
 
@@ -198,8 +196,7 @@ function App() {
       });
 
       apiClient.current!.onReconnected(() => {
-        updateStatus('watching');
-        setDirectorMessage('Observing...');
+        // Keep in recording/active state, don't transition to watching
         if ('vibrate' in navigator) navigator.vibrate([40, 40, 40]);
       });
 
@@ -244,12 +241,20 @@ function App() {
 
   const stopRecording = useCallback(() => {
     // 2026 Direct Intent: Tapping commits the turn
-    // We NO LONGER clear the captureInterval here to keep the Sentinel active
-
+    // IMMEDIATE SENSOR LOCKDOWN: Kill hardware as soon as user commits
+    if (captureInterval.current) {
+        clearInterval(captureInterval.current)
+        captureInterval.current = null
+    }
+    
+    // Capture final frame before closing stream
     const frame = mediaManager.current?.captureFrame()
     if (frame && apiClient.current) {
       apiClient.current.sendVideoFrame(frame)
     }
+
+    mediaManager.current?.stop()
+    setVideoStream(null)
 
     apiClient.current?.sendTurnComplete()
     updateStatus('thinking')
@@ -301,10 +306,7 @@ function App() {
   }, [cameraEnabled])
 
   const releaseRecording = useCallback(() => {
-    if (statusRef.current === 'recording') {
-      updateStatus('watching')
-      setDirectorMessage('Observing...')
-    }
+    // One-Shot Direct Intent: Releasing does nothing, stay in recording state
   }, [])
 
   if (isLoadingSession) {

@@ -38,7 +38,7 @@ export const Nexus: React.FC<NexusProps> = ({
 
     const startPress = () => {
         // If in recording/responding/watching/thinking/reconnecting/error state, a tap means COMMIT / STOP
-        if (status === 'responding' || status === 'watching' || status === 'thinking' || status === 'error' || status === 'recording' || status === 'reconnecting') {
+        if (status === 'responding' || status === 'thinking' || status === 'error' || status === 'recording' || status === 'reconnecting') {
             if ('vibrate' in navigator) navigator.vibrate([40, 20, 40]);
             onStopRecording();
             return;
@@ -72,10 +72,8 @@ export const Nexus: React.FC<NexusProps> = ({
     };
 
     const endPress = () => {
-        // Hold-to-Scan logic: Releasing the hold transition to 'Watching'
+        // One-Shot Direct Intent: Releasing the hold stays in 'recording'
         if (status === 'recording') {
-            if ('vibrate' in navigator) navigator.vibrate([30, 30, 30]);
-            onReleaseRecording();
             return;
         }
 
@@ -141,7 +139,6 @@ export const Nexus: React.FC<NexusProps> = ({
         switch (status) {
             case 'recording': return 'Listening...';
             case 'thinking': return 'Processing...';
-            case 'watching': return 'Watching...';
             case 'responding': return directorMessage || 'Speaking...';
             case 'reconnecting': return directorMessage || 'Connection lost...';
             case 'error': return directorMessage || 'Error';
@@ -199,7 +196,6 @@ export const Nexus: React.FC<NexusProps> = ({
                         status === 'recording' && "bg-red-500/80 scale-100 border-none shadow-[0_0_80px_rgba(239,68,68,0.5)] animate-pulse",
                         status === 'thinking' && "scale-100 border-none shadow-[0_0_60px_rgba(245,158,11,0.4)]",
                         status === 'responding' && "bg-aura-primary scale-100 border-none shadow-[0_0_80px_rgba(19,127,236,0.6)]",
-                        status === 'watching' && "bg-aura-dark scale-100 border-2 border-aura-cyan shadow-[0_0_80px_rgba(19,127,236,0.6)]",
                         status === 'error' && "bg-red-800/60 scale-100 border-none shadow-[0_0_40px_rgba(239,68,68,0.3)]"
                     )}
                     style={{
@@ -211,11 +207,10 @@ export const Nexus: React.FC<NexusProps> = ({
                     }}
                 >
                     {/* Live Camera Feed (Masked by rounded-full on parent) */}
-                    {(status === 'recording' || status === 'responding' || status === 'watching' || status === 'reconnecting') && videoStream && cameraEnabled && (
+                    {(status === 'recording' || status === 'reconnecting') && videoStream && cameraEnabled && (
                         <div 
                             className={cn(
-                                "absolute inset-0 w-full h-full transition-all duration-700 pointer-events-none overflow-hidden isolation-auto",
-                                (status === 'watching') ? "opacity-100 scale-100" : "opacity-60"
+                                "absolute inset-0 w-full h-full transition-all duration-700 pointer-events-none overflow-hidden isolation-auto opacity-60"
                             )}
                             style={{ 
                                 clipPath: 'circle(50% at 50% 50%)',
@@ -228,27 +223,16 @@ export const Nexus: React.FC<NexusProps> = ({
                                 playsInline
                                 muted
                                 className={cn(
-                                    "w-full h-full object-cover transition-filter duration-700 pointer-events-none",
-                                    status === 'watching' ? "grayscale-0 contrast-100 saturate-100" : "mix-blend-screen"
+                                    "w-full h-full object-cover transition-filter duration-700 pointer-events-none mix-blend-screen"
                                 )}
                                 style={{ 
                                     clipPath: 'circle(50% at 50% 50%)',
                                     WebkitClipPath: 'circle(50% at 50% 50%)' 
                                 }}
                             />
-                            {/* Scanning Line overlay for Hands-Free */}
-                            {(status === 'watching') && (
-                                <div 
-                                    className="absolute inset-0 bg-gradient-to-b from-transparent via-aura-cyan/20 to-transparent h-1/2 w-full animate-scan pointer-events-none" 
-                                    style={{
-                                        WebkitClipPath: 'circle(50% at 50% 50%)',
-                                        clipPath: 'circle(50% at 50% 50%)'
-                                    }}
-                                />
-                            )}
                             
                             {/* RED DOT: Active Listening Indicator (New 2026 Standard) */}
-                            {(status === 'recording' || status === 'watching' || status === 'reconnecting') && (
+                            {(status === 'recording' || status === 'reconnecting') && (
                                 <div className="absolute top-4 right-4 flex items-center gap-2 bg-black/40 backdrop-blur-sm px-2 py-1 rounded-full border border-white/10 z-50">
                                     <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse shadow-[0_0_10px_rgba(239,68,68,0.8)]" />
                                     <span className="text-[8px] font-bold text-white uppercase tracking-tighter">LIVE</span>
@@ -299,12 +283,11 @@ export const Nexus: React.FC<NexusProps> = ({
             )}
 
             {/* Sub-label (Recording) */}
-            {status === 'recording' && (
                 <div role="status" aria-live="polite" className="absolute bottom-32 text-center z-10 animate-in slide-in-from-bottom flex flex-col items-center gap-1">
                     <span className="text-red-400 text-xs font-bold uppercase tracking-widest bg-red-500/10 px-3 py-1 rounded-full border border-red-400/30">
                         ● Recording
                     </span>
-                    <p className="text-white/70 text-sm mt-2">Release when done speaking</p>
+                    <p className="text-white/70 text-sm mt-2">Tap to process</p>
                 </div>
             )}
 

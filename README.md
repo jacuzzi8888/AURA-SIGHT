@@ -1,17 +1,17 @@
 # Aura Sight – The Agentic Visual Proxy
 
-> **Elevator Pitch**: Aura Sight is a proactive sensory extension for the visually impaired. Using Gemini Live 2.5 Flash, it provides real-time, hands-free spatial coaching and proactive safety monitoring directly from a smartphone.
+> **Elevator Pitch**: Aura Sight is a proactive sensory extension for the visually impaired. Using Gemini Live 2.5 Flash, it provides a clean, single-turn interaction model for real-time spatial coaching and identification.
 
 ---
 
 ## 🌟 Vision & Inspiration
 Specialized assistive hardware for the blind is often prohibitively expensive. **Aura Sight** democratizes access to spatial independence by turning the smartphone into a professional-grade "Visual Proxy." Built by a solo developer, it bridges the gap between passive description and active guidance.
 
-## 🛡️ Aura Sentinel Pillars
-1. **Hands-Free Sentinel**: A low-friction "Watch Mode" for persistent environmental monitoring.
-2. **Agentic Director**: Proactive camera orientation coaching (e.g., "Tilt up," "Move back").
-3. **Interactive Ear**: A "Conditional Hot-Mic" system for fluid, touch-free Q&A.
-4. **Safety & Privacy at the Edge**: Local MediaPipe models detect hazards and mask faces *before* streaming to the cloud.
+## 🛡️ One-Shot Direct Intent Pillars
+1. **One-Shot Direct Intent**: A clean, single-turn interaction flow (Long-Press to Start -> Tap to Process).
+2. **Agentic Director**: Proactive camera orientation coaching for precise visual alignment.
+3. **Zero-Session Leakage**: Camera and microphone are physically killed instantly after every response.
+4. **Safety & Privacy at the Edge**: Local MediaPipe models redact faces and detect hazards at the source.
 
 ## 🏗️ Technical Architecture (Edge-Cloud Hybrid)
 Aura Sight leverages a high-performance loop designed for under 500ms latency:
