@@ -37,15 +37,10 @@ export const Nexus: React.FC<NexusProps> = ({
     const isEngaged = status !== 'idle';
 
     const startPress = () => {
-        // If in responding/watching/thinking/error state, a tap means COMMIT / STOP
-        if (status === 'responding' || status === 'watching' || status === 'thinking' || status === 'error') {
+        // If in recording/responding/watching/thinking/error state, a tap means COMMIT / STOP
+        if (status === 'responding' || status === 'watching' || status === 'thinking' || status === 'error' || status === 'recording') {
             if ('vibrate' in navigator) navigator.vibrate([40, 20, 40]);
             onStopRecording();
-            return;
-        }
-
-        // If already recording, release handled separately
-        if (status === 'recording') {
             return;
         }
 
@@ -74,13 +69,11 @@ export const Nexus: React.FC<NexusProps> = ({
             setIsPressing(false);
             setPressProgress(0);
         }, duration);
-    };
-
     const endPress = () => {
-        // If we were recording and release the hold, we transition to 'Watching'
+        // Hold-to-Scan logic: Releasing the hold transition to 'Watching'
         if (status === 'recording') {
-            if ('vibrate' in navigator) navigator.vibrate([30, 30, 30]); // Haptic pulse for "Watching" mode
-            onReleaseRecording(); 
+            if ('vibrate' in navigator) navigator.vibrate([30, 30, 30]);
+            onReleaseRecording();
             return;
         }
 
@@ -92,6 +85,16 @@ export const Nexus: React.FC<NexusProps> = ({
             if (pressFrameRef.current) cancelAnimationFrame(pressFrameRef.current);
         }
     };
+
+    useEffect(() => {
+        // Reset pressing state if status changes externally
+        if (status !== 'idle' && isPressing) {
+            setIsPressing(false);
+            setPressProgress(0);
+            if (pressTimerRef.current) clearTimeout(pressTimerRef.current);
+            if (pressFrameRef.current) cancelAnimationFrame(pressFrameRef.current);
+        }
+    }, [status]);
 
     useEffect(() => {
         return () => {

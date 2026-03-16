@@ -9,7 +9,6 @@ The interface embodies an "Ultra-Minimalist Utility" atmosphere. It is profoundl
 * **Pure High-Contrast White** (`#FFFFFF` / `slate-100`): Used for primary text, core iconography, and structural lines. Ensures maximum legibility for low-vision users.
 * **Electric Cyan Primary** (`#137FEC`): The core color for "Watch Mode" scanning and active detection states.
 * **Safety Orange** (`#FF4D00`): Reserved exclusively for critical warnings and Guardian alerts.
-* **Amber Pulse** (`#F59E0B`): Used for the "Interactive Ear" state, indicating the microphone is open and waiting for user input.
 * **Muted Slate** (`#64748B` / `text-slate-500`): Used sparingly for secondary metadata to establish clear visual hierarchy without clutter.
 
 ## 3. Typography Rules
@@ -33,8 +32,7 @@ The entire system utilizes a single typeface: **Inter** (sans-serif).
 * **Recording**: The inner circle turns red, pulsing with a haptic heartbeat.
 * **Thinking**: The ring displays a conic gradient spinner, indicating cloud processing.
 * **Responding**: The ring turns Electric Cyan, displaying the transcription of the AI's response.
-* **Listening (Interactive Ear)**: The inner circle turns Amber, pulsing to indicate the mic is open for a question-response loop.
-* **Watching (Hands-Free)**: The Nexus displays a live camera feed with a scanning line overlay in Electric Cyan.
+* **Watching (Hands-Free)**: The Nexus displays a live camera feed with a scanning line overlay in Electric Cyan. This is the persistent monitoring state.
 * **Reconnecting**: Special state for network recovery. The UI shows a "Reconnecting (Attempt X)" message.
 
 ## 7. Accessibility First

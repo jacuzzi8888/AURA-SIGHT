@@ -142,6 +142,12 @@ function App() {
     try {
       await audioPlayer.current.resume()
 
+      // ── Clean up previous listeners if any ──
+      apiClient.current!.onContent(() => {});
+      apiClient.current!.onAudio(() => {});
+      apiClient.current!.onTurnComplete(() => {});
+      apiClient.current!.onDisconnect(() => {});
+
       apiClient.current!.onContent((text) => {
         setDirectorMessage(text)
         updateStatus('responding')
@@ -155,12 +161,14 @@ function App() {
       })
 
       apiClient.current!.onTurnComplete(async () => {
-        // 2026 Manual Model: We default back to 'idle' after one turn
-        updateStatus('idle')
-        setDirectorMessage(null)
+        // 2026 Persistent Sentinel: We transition back to 'watching' instead of 'idle'
+        updateStatus('watching')
+        setDirectorMessage('Observing...')
         stopHeartbeat()
-        mediaManager.current?.stop()
-        setVideoStream(null)
+        
+        // Sentinel Audio Clue: Subtle haptic pulse + high-pitched chime to confirm Aura is still "Watching"
+        if ('vibrate' in navigator) navigator.vibrate([30, 50, 30])
+        playEarcon('start') // Re-using start earcon as a subtle sentinel cue
       })
 
       apiClient.current!.onDisconnect(() => {
