@@ -243,21 +243,6 @@ function App() {
     if ('vibrate' in navigator) navigator.vibrate([50, 80, 50])
   }, [stopHeartbeat])
 
-  const cancelSession = useCallback(() => {
-    updateStatus('idle')
-    setDirectorMessage(null)
-    /* LEGACY REMOVED: isHandsFree reset */
-    stopHeartbeat()
-    mediaManager.current?.stop()
-    setVideoStream(null)
-    audioPlayer.current?.stop()
-    apiClient.current?.disconnect()
-    if (captureInterval.current) {
-      clearInterval(captureInterval.current)
-      captureInterval.current = null
-    }
-  }, [stopHeartbeat])
-
   const cycleCamera = useCallback(async () => {
     if (!mediaManager.current) mediaManager.current = new MediaManager()
     
@@ -298,6 +283,13 @@ function App() {
       mediaManager.current.toggleVideo(newState)
     }
   }, [cameraEnabled])
+
+  const releaseRecording = useCallback(() => {
+    if (statusRef.current === 'recording') {
+      updateStatus('watching')
+      setDirectorMessage('Observing...')
+    }
+  }, [])
 
   if (isLoadingSession) {
     return (
@@ -352,8 +344,8 @@ function App() {
               status={status}
               directorMessage={directorMessage}
               onStartRecording={startRecording}
+              onReleaseRecording={releaseRecording}
               onStopRecording={stopRecording}
-              onCancel={cancelSession}
               videoStream={videoStream}
               cameraEnabled={cameraEnabled}
             />

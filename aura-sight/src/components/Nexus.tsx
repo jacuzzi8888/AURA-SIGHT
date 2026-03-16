@@ -11,8 +11,8 @@ export interface NexusProps {
     readonly status: AuraStatus;
     readonly directorMessage: string | null;
     readonly onStartRecording: () => void;
+    readonly onReleaseRecording: () => void; // Used for "Watch" mode
     readonly onStopRecording: () => void;
-    readonly onCancel: () => void;
     readonly videoStream?: MediaStream | null;
     readonly cameraEnabled?: boolean;
     readonly className?: string;
@@ -22,8 +22,8 @@ export const Nexus: React.FC<NexusProps> = ({
     status,
     directorMessage,
     onStartRecording,
+    onReleaseRecording,
     onStopRecording,
-    onCancel,
     videoStream,
     cameraEnabled = true,
     className = '',
@@ -37,14 +37,9 @@ export const Nexus: React.FC<NexusProps> = ({
     const isEngaged = status !== 'idle';
 
     const startPress = () => {
-        // If in responding/thinking/error state, tap to cancel
-        if (status === 'responding' || status === 'thinking' || status === 'error') {
-            onCancel();
-            return;
-        }
-
-        // If in 'watching' state, a tap means COMMIT / STOP
-        if (status === 'watching') {
+        // If in responding/watching/thinking/error state, a tap means COMMIT / STOP
+        if (status === 'responding' || status === 'watching' || status === 'thinking' || status === 'error') {
+            if ('vibrate' in navigator) navigator.vibrate([40, 20, 40]);
             onStopRecording();
             return;
         }
@@ -84,7 +79,8 @@ export const Nexus: React.FC<NexusProps> = ({
     const endPress = () => {
         // If we were recording and release the hold, we transition to 'Watching'
         if (status === 'recording') {
-            onStopRecording();
+            if ('vibrate' in navigator) navigator.vibrate([30, 30, 30]); // Haptic pulse for "Watching" mode
+            onReleaseRecording(); 
             return;
         }
 
