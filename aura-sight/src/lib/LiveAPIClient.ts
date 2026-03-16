@@ -6,12 +6,95 @@ const API_BASE_URL = typeof window !== 'undefined' && window.location.hostname =
     ? 'localhost:8080'
     : PRODUCTION_PROXY_URL;
 
+type FunctionArgs = {
+    allergy?: string;
+    fact?: string;
+};
+
+type FunctionCall = {
+    name: string;
+    args?: FunctionArgs | Record<string, unknown>;
+    id: string;
+};
+
+type InlineData = {
+    mimeType: string;
+    data: string;
+};
+
+type ModelPart = {
+    text?: string;
+    inlineData?: InlineData;
+    functionCall?: FunctionCall;
+};
+
+type ModelTurn = {
+    parts?: ModelPart[];
+};
+
+type ServerContent = {
+    interrupted?: boolean;
+    modelTurn?: ModelTurn;
+    inputTranscription?: { text?: string };
+    turnComplete?: boolean;
+};
+
+type ToolCall = {
+    functionCalls?: FunctionCall[];
+};
+
+type Transcription = {
+    text?: string;
+};
+
+type LiveServerMessage = {
+    serverContent?: ServerContent;
+    toolCall?: ToolCall;
+    transcription?: Transcription;
+};
+
+type CloseEventLike = {
+    code?: number;
+    reason?: string;
+};
+
+type RealtimeInput = {
+    mediaChunks: Array<{
+        mimeType: string;
+        data: string;
+    }>;
+};
+
+type ClientContent = {
+    turnComplete: boolean;
+};
+
+type ToolResponse = {
+    functionResponses: Array<{
+        name: string;
+        id: string;
+        response: Record<string, unknown>;
+    }>;
+};
+
+type LiveSession = {
+    sendRealtimeInput: (input: RealtimeInput) => void;
+    sendClientContent: (content: ClientContent) => void;
+    sendToolResponse: (response: ToolResponse) => void;
+    close: () => void;
+};
+
+type QueuedMessage = {
+    realtimeInput?: RealtimeInput;
+    clientContent?: ClientContent;
+};
+
 /**
  * LiveAPIClient handles the bidirectional stream of audio/video to Gemini 
  * using the official @google/genai SDK via the Aura Proxy.
  */
 export class LiveAPIClient {
-    private session: any | null = null;
+    private session: LiveSession | null = null;
     private readonly baseUrl: string;
     private onContentHandler: (text: string) => void = () => { };
     private onAudioHandler: (data: Int16Array) => void = () => { };
@@ -23,7 +106,7 @@ export class LiveAPIClient {
     private onReconnectedHandler: () => void = () => { };
     
     public isConnected: boolean = false;
-    private messageQueue: any[] = [];
+    private messageQueue: QueuedMessage[] = [];
 
     // Reconnection state
     private reconnectAttempts: number = 0;
@@ -57,7 +140,7 @@ export class LiveAPIClient {
         const modelId = "gemini-3-flash";
 
         try {
-            this.session = await ai.live.connect({
+            const session = await ai.live.connect({
                 model: modelId,
                 config: {
                     responseModalities: [Modality.AUDIO],
@@ -103,10 +186,10 @@ ONE-SHOT DIRECT INTENT PROTOCOL:
                         this.reconnectAttempts = 0;
                         this.flushMessageQueue();
                     },
-                    onmessage: (msg: any) => {
+                    onmessage: (msg: LiveServerMessage) => {
                         this.handleServerMessage(msg);
                     },
-                    onclose: (event: any) => {
+                    onclose: (event: CloseEventLike) => {
                         console.log("LiveAPIClient: SDK Session Closed", event);
                         this.isConnected = false;
                         this.onDisconnectHandler(event.reason || "Connection closed");
@@ -121,11 +204,12 @@ ONE-SHOT DIRECT INTENT PROTOCOL:
                             this.attemptReconnect();
                         }
                     },
-                    onerror: (err: any) => {
+                    onerror: (err: unknown) => {
                         console.error('LiveAPIClient: SDK Session Error', err);
                     }
                 }
             });
+            this.session = session as LiveSession;
         } catch (err) {
             console.error("LiveAPIClient: SDK Connection failed", err);
             throw err;
@@ -154,11 +238,11 @@ ONE-SHOT DIRECT INTENT PROTOCOL:
             await this.connect();
             this.onReconnectedHandler();
         } catch (e) {
-            // Re-attempting is handled by connect's own error or next onclose
+            console.debug('LiveAPIClient: Reconnect attempt failed', e);
         }
     }
 
-    private handleServerMessage(message: any) {
+    private handleServerMessage(message: LiveServerMessage) {
         // Interruption
         if (message.serverContent?.interrupted) {
             this.onInterruptedHandler();
@@ -205,8 +289,9 @@ ONE-SHOT DIRECT INTENT PROTOCOL:
         }
     }
 
-    private async executeFunctionCall(fc: any) {
+    private async executeFunctionCall(fc: FunctionCall) {
         const { name, args, id } = fc;
+        const safeArgs = (args ?? {}) as FunctionArgs;
         console.log(`Tool Call: ${name}`, args);
         try {
             const { data: { user } } = await supabase.auth.getUser();
@@ -215,14 +300,14 @@ ONE-SHOT DIRECT INTENT PROTOCOL:
             if (name === 'add_allergy') {
                 await supabase.from('ai_memory').insert({ 
                     user_id: user.id, 
-                    content: `Allergy: ${args.allergy}`, 
+                    content: `Allergy: ${safeArgs.allergy}`, 
                     category: 'allergy' 
                 });
                 this.sendToolResponse(name, id, { result: 'Saved' });
             } else if (name === 'save_fact') {
                 await supabase.from('ai_memory').insert({ 
                     user_id: user.id, 
-                    content: args.fact, 
+                    content: safeArgs.fact, 
                     category: 'fact' 
                 });
                 this.sendToolResponse(name, id, { result: 'Saved' });
@@ -242,7 +327,7 @@ ONE-SHOT DIRECT INTENT PROTOCOL:
                 }]
             });
         } catch (e) {
-            console.debug("LiveAPIClient: Failed to send video frame (socket closed)");
+            console.debug("LiveAPIClient: Failed to send video frame (socket closed)", e);
         }
     }
 
@@ -261,7 +346,7 @@ ONE-SHOT DIRECT INTENT PROTOCOL:
                 }]
             });
         } catch (e) {
-            console.debug("LiveAPIClient: Failed to send audio chunk (socket closed)");
+            console.debug("LiveAPIClient: Failed to send audio chunk (socket closed)", e);
         }
     }
 
@@ -270,7 +355,7 @@ ONE-SHOT DIRECT INTENT PROTOCOL:
         this.session.sendClientContent({ turnComplete: true });
     }
 
-    private sendToolResponse(name: string, id: string, response: any) {
+    private sendToolResponse(name: string, id: string, response: Record<string, unknown>) {
         if (!this.session || !this.isConnected) return;
         this.session.sendToolResponse({
             functionResponses: [{ name, id, response }]
@@ -280,6 +365,9 @@ ONE-SHOT DIRECT INTENT PROTOCOL:
     private flushMessageQueue() {
         while (this.messageQueue.length > 0) {
             const msg = this.messageQueue.shift();
+            if (!msg || !this.session) {
+                continue;
+            }
             // In SDK mode, we call session methods
             if (msg.realtimeInput) this.session.sendRealtimeInput(msg.realtimeInput);
             if (msg.clientContent) this.session.sendClientContent(msg.clientContent);
