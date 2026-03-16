@@ -18,7 +18,7 @@ type FunctionCall = {
 };
 
 type InlineData = {
-    mimeType: string;
+    mimeType?: string;
     data: string;
 };
 
@@ -29,6 +29,7 @@ type ModelPart = {
 };
 
 type ModelTurn = {
+    role?: string;
     parts?: ModelPart[];
 };
 
@@ -186,8 +187,8 @@ ONE-SHOT DIRECT INTENT PROTOCOL:
                         this.reconnectAttempts = 0;
                         this.flushMessageQueue();
                     },
-                    onmessage: (msg: LiveServerMessage) => {
-                        this.handleServerMessage(msg);
+                    onmessage: (msg: any) => {
+                        this.handleServerMessage(msg as LiveServerMessage);
                     },
                     onclose: (event: CloseEventLike) => {
                         console.log("LiveAPIClient: SDK Session Closed", event);
@@ -255,7 +256,7 @@ ONE-SHOT DIRECT INTENT PROTOCOL:
             for (const part of modelTurn.parts) {
                 if (part.text) this.onContentHandler(part.text);
                 
-                if (part.inlineData && part.inlineData.mimeType.startsWith('audio')) {
+                if (part.inlineData && part.inlineData.mimeType?.startsWith('audio')) {
                     const binaryString = atob(part.inlineData.data);
                     const bytes = new Uint8Array(binaryString.length);
                     for (let i = 0; i < binaryString.length; i++) {
