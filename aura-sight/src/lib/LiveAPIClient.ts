@@ -396,7 +396,6 @@ RESPONSE PROTOCOL:
 
             if (name === 'add_allergy') {
                 const { allergy } = args;
-                window.speechSynthesis.speak(new SpeechSynthesisUtterance(`Recording allergy: ${allergy}`));
                 await supabase.from('ai_memory').insert({ 
                     user_id: user.id,
                     content: `Allergy: ${allergy}`,
@@ -405,7 +404,6 @@ RESPONSE PROTOCOL:
                 this.sendToolResponse(name, callId, { result: 'Allergy saved.' });
             } else if (name === 'update_accessible_preference') {
                 const { preference, value } = args;
-                window.speechSynthesis.speak(new SpeechSynthesisUtterance(`Updating preference to ${value}`));
                 await supabase.from('accessibility_preferences').upsert({
                     user_id: user.id,
                     [preference]: value,
@@ -414,7 +412,6 @@ RESPONSE PROTOCOL:
                 this.sendToolResponse(name, callId, { result: 'Preference updated.' });
             } else if (name === 'save_fact') {
                 const { fact } = args;
-                window.speechSynthesis.speak(new SpeechSynthesisUtterance(`Remembering that ${fact}`));
                 await supabase.from('ai_memory').insert({ 
                     user_id: user.id,
                     content: fact,
