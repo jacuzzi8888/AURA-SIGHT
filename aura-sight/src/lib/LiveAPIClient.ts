@@ -59,9 +59,7 @@ export class LiveAPIClient {
             this.session = await ai.live.connect({
                 model: modelId,
                 config: {
-                    generationConfig: {
-                        responseModalities: [Modality.AUDIO],
-                    },
+                    responseModalities: [Modality.AUDIO],
                     systemInstruction: {
                         parts: [{
                             text: `You are Aura Sight, a frontier-class multisensory AI companion for the visually impaired.

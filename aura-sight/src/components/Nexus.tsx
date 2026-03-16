@@ -209,10 +209,13 @@ export const Nexus: React.FC<NexusProps> = ({
                     {(status === 'recording' || status === 'responding' || status === 'watching' || status === 'reconnecting') && videoStream && cameraEnabled && (
                         <div 
                             className={cn(
-                                "absolute inset-0 w-full h-full transition-all duration-700",
+                                "absolute inset-0 w-full h-full transition-all duration-700 pointer-events-none overflow-hidden isolation-auto",
                                 (status === 'watching') ? "opacity-100 scale-100" : "opacity-60"
                             )}
-                            style={{ clipPath: 'circle(50% at 50% 50%)' }}
+                            style={{ 
+                                clipPath: 'circle(50% at 50% 50%)',
+                                WebkitClipPath: 'circle(50% at 50% 50%)'
+                            }}
                         >
                             <video
                                 ref={videoRef}
@@ -220,13 +223,23 @@ export const Nexus: React.FC<NexusProps> = ({
                                 playsInline
                                 muted
                                 className={cn(
-                                    "w-full h-full object-cover pointer-events-none transition-filter duration-700",
+                                    "w-full h-full object-cover transition-filter duration-700 pointer-events-none",
                                     status === 'watching' ? "grayscale-0 contrast-100 saturate-100" : "mix-blend-screen"
                                 )}
+                                style={{ 
+                                    clipPath: 'circle(50% at 50% 50%)',
+                                    WebkitClipPath: 'circle(50% at 50% 50%)' 
+                                }}
                             />
                             {/* Scanning Line overlay for Hands-Free */}
                             {(status === 'watching') && (
-                                <div className="absolute inset-0 bg-gradient-to-b from-transparent via-aura-cyan/20 to-transparent h-1/2 w-full animate-scan pointer-events-none" />
+                                <div 
+                                    className="absolute inset-0 bg-gradient-to-b from-transparent via-aura-cyan/20 to-transparent h-1/2 w-full animate-scan pointer-events-none" 
+                                    style={{
+                                        WebkitClipPath: 'circle(50% at 50% 50%)',
+                                        clipPath: 'circle(50% at 50% 50%)'
+                                    }}
+                                />
                             )}
                             
                             {/* RED DOT: Active Listening Indicator (New 2026 Standard) */}
