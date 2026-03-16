@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
-import type { AuraStatus } from '../App';
+import type { AuraStatus } from '../lib/sessionTypes';
 
 /* eslint-disable react-hooks/set-state-in-effect */
 
