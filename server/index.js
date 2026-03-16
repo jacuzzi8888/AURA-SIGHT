@@ -138,11 +138,19 @@ wss.on('connection', async (ws, req) => {
                 const baseInstructions = msg.setup.systemInstruction?.parts?.[0]?.text || "";
                 const finalInstructions = `${baseInstructions}\n\n${userContextStr}`;
 
-                // Extract model ID (ensure it includes the full resource path for Vertex)
+                // Extract model ID and normalize (Vertex AI requires project/location path)
                 let modelId = msg.setup.model || 'gemini-2.0-flash-live-preview-01-21';
+                
+                // Strip "models/" prefix if it came from AI Studio-style client
+                if (modelId.startsWith('models/')) {
+                    modelId = modelId.replace('models/', '');
+                }
+
                 if (!modelId.includes('/')) {
                     modelId = `projects/${project}/locations/${location}/publishers/google/models/${modelId}`;
                 }
+                
+                console.log(`SDK Proxy: Reconstructed Vertex Model ID: ${modelId}`);
 
                 try {
                     session = await ai.live.connect({

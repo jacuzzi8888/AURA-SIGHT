@@ -54,7 +54,7 @@ export class LiveAPIClient {
             }
         });
 
-        const modelId = "models/gemini-2.0-flash-live-preview-01-21";
+        const modelId = "gemini-2.0-flash-live-preview-01-21";
 
         try {
             this.session = await ai.live.connect({
@@ -228,30 +228,35 @@ DIRECT INTENT PROTOCOL:
 
     sendVideoFrame(base64Frame: string) {
         if (!this.session || !this.isConnected) return;
-        this.session.sendRealtimeInput({
-            mediaChunks: [{
-                mimeType: "image/jpeg",
-                data: base64Frame
-            }]
-        });
+        try {
+            this.session.sendRealtimeInput({
+                mediaChunks: [{
+                    mimeType: "image/jpeg",
+                    data: base64Frame
+                }]
+            });
+        } catch (e) {
+            console.debug("LiveAPIClient: Failed to send video frame (socket closed)");
+        }
     }
 
     sendAudioChunk(pcm16Data: Int16Array) {
         if (!this.session || !this.isConnected) return;
-        // The SDK handles binary Data or base64. 
-        // We'll use the SDK's expected format which is a base64 string in mediaChunks 
-        // or a Blob if we want the SDK to handle conversion.
-        const uint8 = new Uint8Array(pcm16Data.buffer);
-        let binary = '';
-        for (let i = 0; i < uint8.byteLength; i++) {
-            binary += String.fromCharCode(uint8[i]);
+        try {
+            const uint8 = new Uint8Array(pcm16Data.buffer);
+            let binary = '';
+            for (let i = 0; i < uint8.byteLength; i++) {
+                binary += String.fromCharCode(uint8[i]);
+            }
+            this.session.sendRealtimeInput({
+                mediaChunks: [{
+                    mimeType: "audio/pcm;rate=16000",
+                    data: btoa(binary)
+                }]
+            });
+        } catch (e) {
+            console.debug("LiveAPIClient: Failed to send audio chunk (socket closed)");
         }
-        this.session.sendRealtimeInput({
-            mediaChunks: [{
-                mimeType: "audio/pcm;rate=16000",
-                data: btoa(binary)
-            }]
-        });
     }
 
     sendTurnComplete() {
