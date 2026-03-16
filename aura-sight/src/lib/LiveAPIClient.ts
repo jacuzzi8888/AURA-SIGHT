@@ -54,7 +54,7 @@ export class LiveAPIClient {
             }
         });
 
-        const modelId = "gemini-2.0-flash-live-preview-01-21";
+        const modelId = "gemini-2.5-flash-live-native-audio";
 
         try {
             this.session = await ai.live.connect({

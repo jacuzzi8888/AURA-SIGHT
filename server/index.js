@@ -123,14 +123,19 @@ wss.on('connection', async (ws, req) => {
         try {
             if (isBinary) {
                 if (session) {
+                    console.log(`SDK Proxy: Routing binary chunk (${data.length} bytes)`);
                     session.sendRealtimeInput({
-                        audio: data
+                        mediaChunks: [{
+                            data: data,
+                            mimeType: 'audio/pcm;rate=16000' // Matches client's capture rate
+                        }]
                     });
                 }
                 return;
             }
 
             const msg = JSON.parse(data.toString());
+            console.log(`SDK Proxy: Received message:`, Object.keys(msg));
 
             // Handle Setup Interception
             // The SDK might send 'setup' as the first message
@@ -141,20 +146,21 @@ wss.on('connection', async (ws, req) => {
                 const finalInstructions = `${baseInstructions}\n\n${userContextStr}`;
 
                 // Extract model ID and normalize
-                let modelId = msg.setup.model || 'gemini-2.0-flash-live-preview-01-21';
+                console.log(`SDK Proxy: Intercepted model: ${msg.setup.model}`);
+                
+                let modelId = msg.setup.model || 'gemini-2.5-flash-live-native-audio';
                 
                 // Strip "models/" prefix if it came from AI Studio-style client
                 if (modelId.startsWith('models/')) {
                     modelId = modelId.replace('models/', '');
                 }
 
-                // For Vertex AI SDK, we only need the publishers/google/models/ prefix
-                // The SDK handles projects/{project}/locations/{location} automatically
-                if (!modelId.includes('publishers/')) {
+                // For Vertex AI SDK, when vertexai: true, we should use the publishers/google/models/ prefix
+                if (!modelId.includes('publishers/') && !modelId.includes('projects/')) {
                     modelId = `publishers/google/models/${modelId}`;
                 }
                 
-                console.log(`SDK Proxy: Connecting to Vertex Model: ${modelId} (Project: ${project}, Location: ${location})`);
+                console.log(`SDK Proxy: Connection target: ${modelId}`);
 
                 try {
                     session = await ai.live.connect({
@@ -224,9 +230,5 @@ wss.on('connection', async (ws, req) => {
     ws.on('error', (err) => {
         console.error('Client socket error:', err);
         if (session) session.close();
-    });
-});
-
-ent is alive
     });
 });
