@@ -9,6 +9,8 @@
   /* Social Mirror accent */
   --color-aura-dark: #0A0A0A;
   /* Pitch Black Canvas */
+  --color-aura-amber: #F59E0B;
+  /* Interactive Listening: Amber */
   --color-aura-light: #FFFFFF;
   /* Pure High-Contrast White */
 
@@ -16,6 +18,13 @@
 
   --animate-spin-slow: spin 20s linear infinite;
   --animate-spin-reverse-slow: spin 30s linear infinite reverse;
+  --animate-scan: scan 3s linear infinite;
+
+  @keyframes scan {
+    0% { transform: translateY(-100%); opacity: 0; }
+    50% { opacity: 1; }
+    100% { transform: translateY(200%); opacity: 0; }
+  }
 }
 
 

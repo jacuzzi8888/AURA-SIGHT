@@ -4,13 +4,14 @@
  * No file loading required.
  */
 
-type EarconType = 'start' | 'thinking' | 'success' | 'error';
+type EarconType = 'start' | 'thinking' | 'success' | 'error' | 'stop';
 
 let sharedContext: AudioContext | null = null;
 
 function getContext(): AudioContext {
     if (!sharedContext || sharedContext.state === 'closed') {
-        sharedContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+        const AudioContextCtor = getAudioContextConstructor();
+        sharedContext = new AudioContextCtor();
     }
     return sharedContext;
 }
@@ -44,6 +45,9 @@ export function playEarcon(type: EarconType): void {
             break;
         case 'error':
             playErrorTone(ctx);
+            break;
+        case 'stop':
+            playStopChime(ctx);
             break;
     }
 }
@@ -124,4 +128,35 @@ function playErrorTone(ctx: AudioContext) {
         osc.start(t);
         osc.stop(t + 0.15);
     }
+}
+
+/** Descending: 660Hz -> 440Hz, 300ms */
+function playStopChime(ctx: AudioContext) {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    const now = ctx.currentTime;
+
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(660, now);
+    osc.frequency.exponentialRampToValueAtTime(440, now + 0.3);
+
+    gain.gain.setValueAtTime(0.1, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
+
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.3);
+}
+
+type AudioContextWindow = Window & {
+    webkitAudioContext?: typeof AudioContext;
+};
+
+function getAudioContextConstructor(): typeof AudioContext {
+    const ctor = window.AudioContext || (window as AudioContextWindow).webkitAudioContext;
+    if (!ctor) {
+        throw new Error('AudioContext is not supported in this browser.');
+    }
+    return ctor;
 }

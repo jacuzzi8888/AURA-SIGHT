@@ -1,9 +1,9 @@
 import express from 'express';
-import { WebSocketServer, WebSocket } from 'ws';
+import { WebSocketServer } from 'ws';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import { SecretManagerServiceClient } from '@google-cloud/secret-manager';
-import { GoogleAuth } from 'google-auth-library';
+import { GoogleGenAI } from '@google/genai';
+import { createClient } from '@supabase/supabase-js';
 
 dotenv.config();
 
@@ -16,130 +16,232 @@ app.get('/health', (req, res) => {
 });
 
 const PORT = process.env.PORT || 8080;
-const PROXY_API_KEY = process.env.PROXY_API_KEY || '';
-let secretClient = null;
+const SUPABASE_URL = process.env.VITE_SUPABASE_URL || '';
+const SUPABASE_ANON_KEY = process.env.VITE_SUPABASE_ANON_KEY || '';
 
-/**
- * Retrieves an OAuth2 Access Token for Vertex AI.
- * Uses Service Account credentials from the environment.
- */
-async function getAccessToken() {
+if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+    console.warn('WARNING: Supabase credentials entirely missing. Proxy auth will fail.');
+}
+
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// Initialize Google Gen AI SDK for Vertex AI
+const project = process.env.GOOGLE_CLOUD_PROJECT || 'ocellus-488718';
+const location = process.env.GOOGLE_CLOUD_LOCATION || 'us-central1';
+const serviceAccountJson = process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
+
+let aiConfig = {
+    vertexai: true,
+    project: project,
+    location: location,
+};
+
+// Vercel Support: Handle Service Account JSON from env
+if (serviceAccountJson) {
     try {
-        const auth = new GoogleAuth({
-            scopes: 'https://www.googleapis.com/auth/cloud-platform',
-        });
-        const client = await auth.getClient();
-        const token = await client.getAccessToken();
-        return token.token;
-    } catch (err) {
-        console.error("Failed to retrieve Access Token:", err);
-        return null;
+        aiConfig.credentials = JSON.parse(serviceAccountJson);
+        console.log('SDK Proxy: Using Service Account Credentials from GOOGLE_SERVICE_ACCOUNT_JSON');
+    } catch (e) {
+        console.error('SDK Proxy: Failed to parse GOOGLE_SERVICE_ACCOUNT_JSON. Falling back to ADC.', e);
     }
 }
+
+console.log(`SDK Proxy: Initializing SDK with Project: ${project}, Location: ${location}`);
+
+const ai = new GoogleGenAI(aiConfig);
 
 const server = app.listen(PORT, () => {
     console.log(`Aura Proxy listening on port ${PORT}`);
 });
 
-const wss = new WebSocketServer({ server });
+// Create WebSocket server. SDK might connect to different paths, so we handle all paths.
+const wss = new WebSocketServer({ noServer: true });
+
+server.on('upgrade', (request, socket, head) => {
+    wss.handleUpgrade(request, socket, head, (ws) => {
+        wss.emit('connection', ws, request);
+    });
+});
 
 wss.on('connection', async (ws, req) => {
-    console.log('New client connection request to Aura Proxy');
+    console.log(`New client connection to: ${req.url}`);
 
-    // ── Proxy Authentication ──
-    // If PROXY_API_KEY is set, validate the client's key from URL params
-    if (PROXY_API_KEY) {
-        try {
-            const url = new URL(req.url || '/', `http://${req.headers.host}`);
-            const clientKey = url.searchParams.get('key');
-            if (clientKey !== PROXY_API_KEY) {
-                console.warn('Client rejected: invalid API key');
-                ws.close(4001, 'Unauthorized');
-                return;
-            }
-        } catch (e) {
-            console.warn('Client rejected: could not parse URL');
-            ws.close(4001, 'Unauthorized');
-            return;
+    // ── Proxy Authentication (Supabase JWT) ──
+    const authHeader = req.headers['sec-websocket-protocol'];
+    const urlParams = new URL(req.url, `http://${req.headers.host}`).searchParams;
+    let clientJwt = urlParams.get('key') || urlParams.get('jwt');
+
+    if (!clientJwt && authHeader) {
+        const protocols = authHeader.split(',').map(p => p.trim());
+        if (protocols.length >= 2 && protocols[0] === 'jwt') {
+            clientJwt = protocols[1];
+        } else if (protocols.length === 1 && protocols[0].length > 20) {
+            clientJwt = protocols[0];
         }
     }
 
-    const accessToken = await getAccessToken();
 
-    if (!accessToken) {
-        console.error('CRITICAL: Access Token is missing. Proxy cannot function.');
-        ws.close(1011, 'Internal Server Error: Auth Failed');
+    if (!clientJwt) {
+        console.warn('Client rejected: No JWT found in sec-websocket-protocol');
+        ws.close(4001, 'Unauthorized: Missing JWT');
         return;
     }
 
-    // Vertex AI Multimodal Live API WebSocket endpoint
-    const project = process.env.GOOGLE_CLOUD_PROJECT || 'ocellus-488718';
-    const location = 'us-central1';
-    const googleUrl = `wss://${location}-aiplatform.googleapis.com/ws/google.cloud.aiplatform.v1beta1.LlmBidiService/BidiGenerateContent`;
+    const { data: { user }, error: authError } = await supabase.auth.getUser(clientJwt);
+    
+    if (authError || !user) {
+        console.warn('Client rejected: Invalid JWT', authError?.message);
+        ws.close(4001, 'Unauthorized: Invalid Token');
+        return;
+    }
+    
+    console.log(`Authenticated user: ${user.id}`);
 
-    const googleWs = new WebSocket(googleUrl, {
-        headers: {
-            'Authorization': `Bearer ${accessToken}`
-        }
-    });
+    // ── Fetch User Context (Preferences & Memory) ──
+    let userContextStr = "";
+    try {
+        const { data: prefs } = await supabase
+            .from('accessibility_preferences')
+            .select('speech_rate, high_contrast_mode, allergies')
+            .eq('user_id', user.id)
+            .single();
 
-    // ── Application-Level Heartbeat ──
-    // Browser WebSocket API cannot send native pings.
-    // We send server-side pings to keep the connection alive through load balancers.
-    let heartbeatInterval = null;
+        const { data: memories } = await supabase
+            .from('ai_memory')
+            .select('memory_type, content')
+            .eq('user_id', user.id)
+            .order('created_at', { ascending: false })
+            .limit(10);
 
-    // Proxy messages from Google back to the Client
-    googleWs.on('message', (data, isBinary) => {
-        if (ws.readyState === WebSocket.OPEN) {
-            ws.send(data, { binary: isBinary });
-        }
-    });
-
-    // Proxy messages from the Client to Google
-    ws.on('message', (data, isBinary) => {
-        if (googleWs.readyState === WebSocket.OPEN) {
-            googleWs.send(data, { binary: isBinary });
-        }
-    });
-
-    googleWs.on('open', () => {
-        console.log('Successfully bridged to Google Multimodal Live API');
-
-        // Start heartbeat: ping every 30 seconds to keep connection alive
-        heartbeatInterval = setInterval(() => {
-            if (ws.readyState === WebSocket.OPEN) {
-                ws.ping();
+        userContextStr += "\n-- USER PREFERENCES --\n";
+        if (prefs) {
+            userContextStr += `Speech Rate: ${prefs.speech_rate}\n`;
+            if (prefs.allergies?.length > 0) {
+                userContextStr += `CRITICAL ALLERGIES: ${prefs.allergies.join(', ')}\n`;
             }
-            if (googleWs.readyState === WebSocket.OPEN) {
-                googleWs.ping();
-            }
-        }, 30000);
-    });
+        }
+        userContextStr += "\n-- AI MEMORY --\n";
+        if (memories?.length > 0) {
+            memories.forEach(m => userContextStr += `[${m.memory_type}]: ${m.content}\n`);
+        }
+    } catch (e) {
+        console.error("Context fetch failed:", e);
+    }
 
-    googleWs.on('close', (code, reason) => {
-        console.log(`Google connection closed: ${code} - ${reason}`);
-        if (heartbeatInterval) clearInterval(heartbeatInterval);
-        ws.close(code, reason);
+    // ── Initialize Multimodal Live Session via SDK ──
+    let session = null;
+    let hasSentSetup = false;
+
+    ws.on('message', async (data, isBinary) => {
+        try {
+            if (isBinary) {
+                if (session) {
+                    console.log(`SDK Proxy: Routing binary chunk (${data.length} bytes)`);
+                    session.sendRealtimeInput({
+                        mediaChunks: [{
+                            data: data,
+                            mimeType: 'audio/pcm;rate=16000' // Matches client's capture rate
+                        }]
+                    });
+                }
+                return;
+            }
+
+            const msg = JSON.parse(data.toString());
+            console.log(`SDK Proxy: Received message:`, Object.keys(msg));
+
+            // Handle Setup Interception
+            // The SDK might send 'setup' as the first message
+            if (msg.setup && !hasSentSetup) {
+                console.log('Intercepting SDK Setup for Context Injection...');
+                
+                const baseInstructions = msg.setup.systemInstruction?.parts?.[0]?.text || "";
+                const finalInstructions = `${baseInstructions}\n\n${userContextStr}`;
+
+                // Extract model ID and normalize
+                console.log(`SDK Proxy: Intercepted model: ${msg.setup.model}`);
+                
+                let modelId = msg.setup.model || 'gemini-3-flash';
+                
+                // Strip "models/" prefix if it came from AI Studio-style client
+                if (modelId.startsWith('models/')) {
+                    modelId = modelId.replace('models/', '');
+                }
+
+                // For Vertex AI SDK, when vertexai: true, we should use the publishers/google/models/ prefix
+                if (!modelId.includes('publishers/') && !modelId.includes('projects/')) {
+                    modelId = `publishers/google/models/${modelId}`;
+                }
+                
+                console.log(`SDK Proxy: Connection target: ${modelId}`);
+
+                try {
+                    session = await ai.live.connect({
+                        model: modelId,
+                        config: {
+                            systemInstruction: {
+                                parts: [{ text: finalInstructions }]
+                            },
+                            generationConfig: msg.setup.generationConfig,
+                            tools: msg.setup.tools,
+                            responseModalities: msg.setup.generationConfig?.responseModalities || ["AUDIO"]
+                        },
+                        callbacks: {
+                            onopen: () => {
+                                console.log('SDK Proxy: Upstream Connected');
+                                if (ws.readyState === WebSocket.OPEN) {
+                                    // Mirror the SDK's setupComplete message
+                                    ws.send(JSON.stringify({ setupComplete: {} }));
+                                }
+                            },
+                            onmessage: (serverMsg) => {
+                                if (ws.readyState === ws.OPEN) {
+                                    ws.send(JSON.stringify(serverMsg));
+                                }
+                            },
+                            onerror: (err) => {
+                                console.error('SDK Proxy: Upstream Error', err);
+                                if (ws.readyState === ws.OPEN) {
+                                    ws.send(JSON.stringify({ error: err.message || 'Upstream connection error' }));
+                                }
+                            },
+                            onclose: () => {
+                                console.log('SDK Proxy: Upstream Closed');
+                                ws.close();
+                            }
+                        }
+                    });
+                    hasSentSetup = true;
+                } catch (connErr) {
+                    console.error('SDK Proxy: Connection failed', connErr);
+                    ws.close(1011, 'Upstream connection failed');
+                }
+                return;
+            }
+
+            // Route standard client content to the active session
+            if (session) {
+                if (msg.clientContent) {
+                    session.sendClientContent(msg.clientContent);
+                } else if (msg.realtimeInput) {
+                    session.sendRealtimeInput(msg.realtimeInput);
+                } else if (msg.toolResponse) {
+                    session.sendToolResponse(msg.toolResponse);
+                }
+            }
+
+        } catch (e) {
+            console.error('SDK Proxy: Message dispatch error:', e);
+        }
     });
 
     ws.on('close', () => {
-        console.log('Client session ended. Terminating Google bridge.');
-        if (heartbeatInterval) clearInterval(heartbeatInterval);
-        googleWs.close();
-    });
-
-    googleWs.on('error', (err) => {
-        console.error('Google WebSocket error:', err);
-        ws.send(JSON.stringify({ error: 'Upstream connection error', code: 'UPSTREAM_ERROR' }));
+        console.log('Client disconnected');
+        if (session) session.close();
     });
 
     ws.on('error', (err) => {
-        console.error('Client WebSocket error:', err);
-        googleWs.close();
-    });
-
-    // Handle pong responses (for connection health monitoring)
-    ws.on('pong', () => {
-        // Client is alive
+        console.error('Client socket error:', err);
+        if (session) session.close();
     });
 });

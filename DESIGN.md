@@ -7,8 +7,8 @@ The interface embodies an "Ultra-Minimalist Utility" atmosphere. It is profoundl
 ## 2. Color Palette & Roles
 * **Pitch Black Canvas** (`#0A0A0A`): The fundamental background color. It creates an infinite, distraction-free environment that recedes completely.
 * **Pure High-Contrast White** (`#FFFFFF` / `slate-100`): Used for primary text, core iconography, and structural lines. Ensures maximum legibility for low-vision users.
-* **Electric Cyan Primary** (`#137FEC`): The sole vibrant color in the default state, used strictly to indicate active scanning, focus, or "Safe" states.
-* **Safety Orange** (`#FF4D00`): (Inferred from prompt) Reserved exclusively for critical warnings and Guardian alerts. Never used for decoration.
+* **Electric Cyan Primary** (`#137FEC`): The core color for active response states.
+* **Safety Orange** (`#FF4D00`): Reserved exclusively for critical warnings and Guardian alerts.
 * **Muted Slate** (`#64748B` / `text-slate-500`): Used sparingly for secondary metadata to establish clear visual hierarchy without clutter.
 
 ## 3. Typography Rules
@@ -26,3 +26,17 @@ The entire system utilizes a single typeface: **Inter** (sans-serif).
 * **Absolute Centering:** The core function block is perfectly centered in the viewport, surrounded by massive negative space to prevent accidental touches.
 * **Anchored Peripheries:** Secondary actions (Settings menu, tab bar) are solidly anchored to the extreme top and bottom of the screen (`px-10 pb-10 pt-4`).
 * **Tap Target Sizing:** Interactive areas rely on the padding of the layout, ensuring that the touch region is massive, even if the visual icon is standard size.
+
+## 6. Dynamic States & Interaction (Direct Intent Model)
+* **Idle**: The Nexus ring is a thin, static white translucent stroke. Pure silence. Camera and microphone are physically offline.
+* **Recording**: Initiated by Long-Press. The inner circle turns red. Releasing the finger keeps it in this state (Hands-Free Capture).
+* **Thinking**: Initiated by a Tap. **Sensors (Camera/Mic) are physically killed immediately**. Conic gradient spinner active.
+* **Responding**: The ring turns Electric Cyan, displaying the AI's response via audio only. WebSocket remains open for audio playback.
+* **Completion**: Aura returns to **Idle** IMMEDIATELY after every response. WebSocket is closed.
+
+## 7. Accessibility First
+* **Screen Reader Support**: All status changes are wrapped in semantic ARIA live regions (`role="status"`). 
+  - `assertive`: Used for critical Director guidance ("Tilt up").
+  - `polite`: Used for background state changes ("Thinking", "Reconnecting").
+* **Tactile Feedback**: Pulse haptics used sparingly to communicate the "listening" state to non-visual users.
+* **Isolated Privacy**: The "Push-to-Talk Perimeter" ensures the camera and mic are completely offline and disconnected when the app is idle.

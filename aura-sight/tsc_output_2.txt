@@ -1,2 +1,0 @@
-src/App.tsx(9,10): error TS2300: Duplicate identifier 'Nexus'.
-src/App.tsx(10,10): error TS2300: Duplicate identifier 'Nexus'.

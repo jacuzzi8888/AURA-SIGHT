@@ -1,9 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
-import type { AuraStatus } from '../App';
+import type { AuraStatus } from '../lib/sessionTypes';
 
-export function cn(...inputs: ClassValue[]) {
+/* eslint-disable react-hooks/set-state-in-effect */
+
+function cn(...inputs: ClassValue[]) {
     return twMerge(clsx(inputs));
 }
 
@@ -12,7 +14,8 @@ export interface NexusProps {
     readonly directorMessage: string | null;
     readonly onStartRecording: () => void;
     readonly onStopRecording: () => void;
-    readonly onCancel: () => void;
+    readonly videoStream?: MediaStream | null;
+    readonly cameraEnabled?: boolean;
     readonly className?: string;
 }
 
@@ -21,9 +24,11 @@ export const Nexus: React.FC<NexusProps> = ({
     directorMessage,
     onStartRecording,
     onStopRecording,
-    onCancel,
+    videoStream,
+    cameraEnabled = true,
     className = '',
 }) => {
+    const videoRef = useRef<HTMLVideoElement>(null);
     const [isPressing, setIsPressing] = useState(false);
     const [pressProgress, setPressProgress] = useState(0);
     const pressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -32,13 +37,10 @@ export const Nexus: React.FC<NexusProps> = ({
     const isEngaged = status !== 'idle';
 
     const startPress = () => {
-        // If in responding/thinking/error state, tap to cancel
-        if (status === 'responding' || status === 'thinking' || status === 'error') {
-            onCancel();
-            return;
-        }
-        // If already recording, release stops recording
-        if (status === 'recording') {
+        // If in recording/responding/watching/thinking/reconnecting/error state, a tap means COMMIT / STOP
+        if (status === 'responding' || status === 'thinking' || status === 'error' || status === 'recording' || status === 'reconnecting') {
+            if ('vibrate' in navigator) navigator.vibrate([40, 20, 40]);
+            onStopRecording();
             return;
         }
 
@@ -70,9 +72,8 @@ export const Nexus: React.FC<NexusProps> = ({
     };
 
     const endPress = () => {
-        // If recording, release = stop recording -> thinking
+        // One-Shot Direct Intent: Releasing the hold stays in 'recording'
         if (status === 'recording') {
-            onStopRecording();
             return;
         }
 
@@ -86,11 +87,52 @@ export const Nexus: React.FC<NexusProps> = ({
     };
 
     useEffect(() => {
+        // Reset pressing state if status changes externally
+        if (status !== 'idle' && isPressing) {
+            setIsPressing(false);
+            setPressProgress(0);
+            if (pressTimerRef.current) clearTimeout(pressTimerRef.current);
+            if (pressFrameRef.current) cancelAnimationFrame(pressFrameRef.current);
+        }
+    }, [status, isPressing]);
+
+    useEffect(() => {
         return () => {
             if (pressTimerRef.current) clearTimeout(pressTimerRef.current);
             if (pressFrameRef.current) cancelAnimationFrame(pressFrameRef.current);
         };
     }, []);
+
+    // ── Bind Video Stream ──
+    useEffect(() => {
+        const bindStream = () => {
+            if (videoRef.current && videoStream) {
+                if (videoRef.current.srcObject !== videoStream) {
+                    videoRef.current.srcObject = videoStream;
+                }
+                
+                // 2026 Standard: Aggressive Jumpstart
+                const jumpstart = () => {
+                   if (videoRef.current && videoRef.current.paused) {
+                       videoRef.current.play().catch(e => console.warn("Jumpstart failed:", e));
+                   }
+                };
+                
+                requestAnimationFrame(jumpstart);
+                setTimeout(jumpstart, 50); // Fallback for low-power NPUs
+            } else if (videoRef.current) {
+                videoRef.current.srcObject = null;
+            }
+        };
+        bindStream();
+        
+        const timer = setTimeout(bindStream, 150);
+        const secondTimer = setTimeout(bindStream, 500);
+        return () => {
+            clearTimeout(timer);
+            clearTimeout(secondTimer);
+        };
+    }, [videoStream, status]);
 
     // ── Status Text ──
     const statusLabel = (() => {
@@ -98,6 +140,7 @@ export const Nexus: React.FC<NexusProps> = ({
             case 'recording': return 'Listening...';
             case 'thinking': return 'Processing...';
             case 'responding': return directorMessage || 'Speaking...';
+            case 'reconnecting': return directorMessage || 'Connection lost...';
             case 'error': return directorMessage || 'Error';
             default: return null;
         }
@@ -148,18 +191,56 @@ export const Nexus: React.FC<NexusProps> = ({
                 {/* Inner Circle */}
                 <div
                     className={cn(
-                        "w-[200px] h-[200px] rounded-full transition-all duration-500 flex items-center justify-center overflow-hidden",
+                        "w-[200px] h-[200px] rounded-full transition-all duration-500 flex items-center justify-center overflow-hidden isolation-auto",
                         status === 'idle' && "bg-transparent border-2 border-white/90 scale-95",
                         status === 'recording' && "bg-red-500/80 scale-100 border-none shadow-[0_0_80px_rgba(239,68,68,0.5)] animate-pulse",
                         status === 'thinking' && "scale-100 border-none shadow-[0_0_60px_rgba(245,158,11,0.4)]",
                         status === 'responding' && "bg-aura-primary scale-100 border-none shadow-[0_0_80px_rgba(19,127,236,0.6)]",
                         status === 'error' && "bg-red-800/60 scale-100 border-none shadow-[0_0_40px_rgba(239,68,68,0.3)]"
                     )}
-                    style={status === 'thinking' ? {
-                        background: 'conic-gradient(from 0deg, #F59E0B, #8B5CF6, #3B82F6, #F59E0B)',
-                        animation: 'spin 2s linear infinite'
-                    } : undefined}
+                    style={{
+                        ... (status === 'thinking' ? {
+                            background: 'conic-gradient(from 0deg, #F59E0B, #8B5CF6, #3B82F6, #F59E0B)',
+                            animation: 'spin 2s linear infinite'
+                        } : {}),
+                        isolation: 'isolate'
+                    }}
                 >
+                    {/* Live Camera Feed (Masked by rounded-full on parent) */}
+                    {(status === 'recording' || status === 'reconnecting') && videoStream && cameraEnabled && (
+                        <div 
+                            className={cn(
+                                "absolute inset-0 w-full h-full transition-all duration-700 pointer-events-none overflow-hidden isolation-auto opacity-60"
+                            )}
+                            style={{ 
+                                clipPath: 'circle(50% at 50% 50%)',
+                                WebkitClipPath: 'circle(50% at 50% 50%)'
+                            }}
+                        >
+                            <video
+                                ref={videoRef}
+                                autoPlay
+                                playsInline
+                                muted
+                                className={cn(
+                                    "w-full h-full object-cover transition-filter duration-700 pointer-events-none mix-blend-screen"
+                                )}
+                                style={{ 
+                                    clipPath: 'circle(50% at 50% 50%)',
+                                    WebkitClipPath: 'circle(50% at 50% 50%)' 
+                                }}
+                            />
+                            
+                            {/* RED DOT: Active Listening Indicator (New 2026 Standard) */}
+                            {(status === 'recording' || status === 'reconnecting') && (
+                                <div className="absolute top-4 right-4 flex items-center gap-2 bg-black/40 backdrop-blur-sm px-2 py-1 rounded-full border border-white/10 z-50">
+                                    <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse shadow-[0_0_10px_rgba(239,68,68,0.8)]" />
+                                    <span className="text-[8px] font-bold text-white uppercase tracking-tighter">LIVE</span>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
                     {/* Voice Waveform (Recording / Responding) */}
                     {(status === 'recording' || status === 'responding') && (
                         <div className="flex items-center justify-center gap-1.5 h-16 w-full">
@@ -192,8 +273,12 @@ export const Nexus: React.FC<NexusProps> = ({
             {/* Instructions (Idle) */}
             {status === 'idle' && (
                 <div className={cn("absolute bottom-32 text-center z-10 transition-opacity duration-300", isPressing ? "opacity-0" : "opacity-100")}>
-                    <p className="text-white text-xl font-medium tracking-tight opacity-90 px-8">Hold to talk to Aura</p>
-                    <p className="text-slate-300 text-[10px] font-bold tracking-[0.3em] uppercase mt-3 opacity-60">Aura Sentinel • Active</p>
+                    <p className="text-white text-xl font-medium tracking-tight opacity-90 px-8">
+                        Hold to talk to Aura
+                    </p>
+                    <p className="text-slate-300 text-[10px] font-bold tracking-[0.3em] uppercase mt-3 opacity-60">
+                        Aura Sentinel • Active
+                    </p>
                 </div>
             )}
 
@@ -203,7 +288,7 @@ export const Nexus: React.FC<NexusProps> = ({
                     <span className="text-red-400 text-xs font-bold uppercase tracking-widest bg-red-500/10 px-3 py-1 rounded-full border border-red-400/30">
                         ● Recording
                     </span>
-                    <p className="text-white/70 text-sm mt-2">Release when done speaking</p>
+                    <p className="text-white/70 text-sm mt-2">Tap to process</p>
                 </div>
             )}
 
