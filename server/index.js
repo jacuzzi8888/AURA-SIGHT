@@ -26,8 +26,10 @@ if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // Initialize Google Gen AI SDK for Vertex AI
-const project = process.env.GOOGLE_CLOUD_PROJECT || 'ocellus-488718';
-const location = 'us-central1';
+const project = process.env.GOOGLE_CLOUD_PROJECT || 'aura-sight';
+const location = process.env.GOOGLE_CLOUD_LOCATION || 'us-central1';
+
+console.log(`SDK Proxy: Initializing SDK with Project: ${project}, Location: ${location}`);
 
 const ai = new GoogleGenAI({
     vertexai: true,
@@ -138,7 +140,7 @@ wss.on('connection', async (ws, req) => {
                 const baseInstructions = msg.setup.systemInstruction?.parts?.[0]?.text || "";
                 const finalInstructions = `${baseInstructions}\n\n${userContextStr}`;
 
-                // Extract model ID and normalize (Vertex AI requires project/location path)
+                // Extract model ID and normalize
                 let modelId = msg.setup.model || 'gemini-2.0-flash-live-preview-01-21';
                 
                 // Strip "models/" prefix if it came from AI Studio-style client
@@ -146,11 +148,13 @@ wss.on('connection', async (ws, req) => {
                     modelId = modelId.replace('models/', '');
                 }
 
-                if (!modelId.includes('/')) {
-                    modelId = `projects/${project}/locations/${location}/publishers/google/models/${modelId}`;
+                // For Vertex AI SDK, we only need the publishers/google/models/ prefix
+                // The SDK handles projects/{project}/locations/{location} automatically
+                if (!modelId.includes('publishers/')) {
+                    modelId = `publishers/google/models/${modelId}`;
                 }
                 
-                console.log(`SDK Proxy: Reconstructed Vertex Model ID: ${modelId}`);
+                console.log(`SDK Proxy: Connecting to Vertex Model: ${modelId} (Project: ${project}, Location: ${location})`);
 
                 try {
                     session = await ai.live.connect({
@@ -161,7 +165,7 @@ wss.on('connection', async (ws, req) => {
                             },
                             generationConfig: msg.setup.generationConfig,
                             tools: msg.setup.tools,
-                            responseModalities: msg.setup.generationConfig?.responseModalities || ["audio"]
+                            responseModalities: msg.setup.generationConfig?.responseModalities || ["AUDIO"]
                         },
                         callbacks: {
                             onopen: () => {
