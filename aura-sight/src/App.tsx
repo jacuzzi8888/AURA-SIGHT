@@ -2,6 +2,7 @@ import { useState, useCallback, useRef, useEffect } from 'react'
 import { Eye, Settings, Video, VideoOff } from 'lucide-react'
 import { clsx, type ClassValue } from 'clsx'
 import { twMerge } from 'tailwind-merge'
+import type { Session } from '@supabase/supabase-js'
 
 import { MediaManager } from './lib/MediaManager'
 import { AudioPlayer } from './lib/AudioPlayer'
@@ -23,7 +24,7 @@ export type AuraStatus = 'idle' | 'recording' | 'thinking' | 'responding' | 'err
 type ViewMode = 'nexus' | 'settings' | 'loading'
 
 function App() {
-  const [session, setSession] = useState<any>(null)
+  const [session, setSession] = useState<Session | null>(null)
   const [isLoadingSession, setIsLoadingSession] = useState(true)
 
   const [activeView, setActiveView] = useState<ViewMode>('nexus')
@@ -94,13 +95,26 @@ function App() {
     if (!mediaPipeManager.current) mediaPipeManager.current = new MediaPipeManager()
     if (!audioPlayer.current) audioPlayer.current = new AudioPlayer()
     if (!apiClient.current) apiClient.current = new LiveAPIClient()
+    
+    // 2026 Direct Intent: Force Restart from stuck reconnection/error states
+    if (statusRef.current === 'reconnecting' || statusRef.current === 'error') {
+      console.log("App: Clean start from stuck state...");
+      apiClient.current?.disconnect();
+      mediaManager.current?.stop();
+    } else if (isEngaged && apiClient.current?.isConnected) {
+      // Already active in a positive state, don't double-start
+      return;
+    }
 
     try {
       if (apiClient.current?.isConnected) {
         apiClient.current.disconnect();
       }
-      await mediaManager.current.initialize()
+      // Guarantee sensor cleanup before re-init
+      mediaManager.current?.stop();
+      await mediaManager.current?.initialize();
     } catch (err) {
+      console.error('App: Failed to initialize media pipeline', err)
       updateStatus('error')
       playEarcon('error')
       setDirectorMessage('Camera access denied')
@@ -231,13 +245,14 @@ function App() {
       }, 1000)
 
     } catch (err) {
+      console.error('App: Recording session failed', err)
       updateStatus('error')
       playEarcon('error')
       setDirectorMessage('Connection failed')
       stopHeartbeat()
       mediaManager.current?.stop()
     }
-  }, [startHeartbeat, stopHeartbeat, cameraEnabled])
+  }, [startHeartbeat, stopHeartbeat, cameraEnabled, isEngaged])
 
   const stopRecording = useCallback(() => {
     // 2026 Direct Intent: Tapping commits the turn

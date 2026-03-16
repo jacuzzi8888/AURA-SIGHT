@@ -6,7 +6,9 @@ import App from './App.tsx'
 
 import type { FallbackProps } from 'react-error-boundary'
 
-function ErrorFallback({ error, resetErrorBoundary }: FallbackProps) {
+export function ErrorFallback({ error, resetErrorBoundary }: FallbackProps) {
+  const message = error instanceof Error ? error.message : 'Unknown Error'
+
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-[#050505] p-6 text-center">
       <div className="w-16 h-16 rounded-full bg-red-500/20 flex items-center justify-center mb-6">
@@ -14,7 +16,7 @@ function ErrorFallback({ error, resetErrorBoundary }: FallbackProps) {
       </div>
       <h1 className="text-white text-4xl font-bold tracking-tight mb-4">Aura System Error</h1>
       <pre className="text-red-400 text-lg font-mono bg-red-900/10 p-4 rounded-xl border border-red-500/20 max-w-lg overflow-x-auto whitespace-pre-wrap">
-        {((error as any)?.message || 'Unknown Error')}
+        {message}
       </pre>
       <p className="mt-8 text-slate-500 text-lg max-w-md">
         This is typically due to a configuration gap on the server. Please check your environment variables.

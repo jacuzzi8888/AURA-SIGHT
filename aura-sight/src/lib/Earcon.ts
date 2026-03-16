@@ -10,7 +10,8 @@ let sharedContext: AudioContext | null = null;
 
 function getContext(): AudioContext {
     if (!sharedContext || sharedContext.state === 'closed') {
-        sharedContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+        const AudioContextCtor = getAudioContextConstructor();
+        sharedContext = new AudioContextCtor();
     }
     return sharedContext;
 }
@@ -146,4 +147,16 @@ function playStopChime(ctx: AudioContext) {
     gain.connect(ctx.destination);
     osc.start(now);
     osc.stop(now + 0.3);
+}
+
+type AudioContextWindow = Window & {
+    webkitAudioContext?: typeof AudioContext;
+};
+
+function getAudioContextConstructor(): typeof AudioContext {
+    const ctor = window.AudioContext || (window as AudioContextWindow).webkitAudioContext;
+    if (!ctor) {
+        throw new Error('AudioContext is not supported in this browser.');
+    }
+    return ctor;
 }

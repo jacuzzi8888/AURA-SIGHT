@@ -26,16 +26,29 @@ if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // Initialize Google Gen AI SDK for Vertex AI
-const project = process.env.GOOGLE_CLOUD_PROJECT || 'aura-sight';
+const project = process.env.GOOGLE_CLOUD_PROJECT || 'ocellus-488718';
 const location = process.env.GOOGLE_CLOUD_LOCATION || 'us-central1';
+const serviceAccountJson = process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
 
-console.log(`SDK Proxy: Initializing SDK with Project: ${project}, Location: ${location}`);
-
-const ai = new GoogleGenAI({
+let aiConfig = {
     vertexai: true,
     project: project,
     location: location,
-});
+};
+
+// Vercel Support: Handle Service Account JSON from env
+if (serviceAccountJson) {
+    try {
+        aiConfig.credentials = JSON.parse(serviceAccountJson);
+        console.log('SDK Proxy: Using Service Account Credentials from GOOGLE_SERVICE_ACCOUNT_JSON');
+    } catch (e) {
+        console.error('SDK Proxy: Failed to parse GOOGLE_SERVICE_ACCOUNT_JSON. Falling back to ADC.', e);
+    }
+}
+
+console.log(`SDK Proxy: Initializing SDK with Project: ${project}, Location: ${location}`);
+
+const ai = new GoogleGenAI(aiConfig);
 
 const server = app.listen(PORT, () => {
     console.log(`Aura Proxy listening on port ${PORT}`);
@@ -148,7 +161,7 @@ wss.on('connection', async (ws, req) => {
                 // Extract model ID and normalize
                 console.log(`SDK Proxy: Intercepted model: ${msg.setup.model}`);
                 
-                let modelId = msg.setup.model || 'gemini-live-2.5-flash-native-audio';
+                let modelId = msg.setup.model || 'gemini-3-flash';
                 
                 // Strip "models/" prefix if it came from AI Studio-style client
                 if (modelId.startsWith('models/')) {

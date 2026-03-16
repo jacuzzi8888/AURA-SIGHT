@@ -3,7 +3,7 @@ import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import type { AuraStatus } from '../App';
 
-export function cn(...inputs: ClassValue[]) {
+function cn(...inputs: ClassValue[]) {
     return twMerge(clsx(inputs));
 }
 
@@ -87,12 +87,14 @@ export const Nexus: React.FC<NexusProps> = ({
     useEffect(() => {
         // Reset pressing state if status changes externally
         if (status !== 'idle' && isPressing) {
+            // eslint-disable-next-line react-hooks/set-state-in-effect
             setIsPressing(false);
+            // eslint-disable-next-line react-hooks/set-state-in-effect
             setPressProgress(0);
             if (pressTimerRef.current) clearTimeout(pressTimerRef.current);
             if (pressFrameRef.current) cancelAnimationFrame(pressFrameRef.current);
         }
-    }, [status]);
+    }, [status, isPressing]);
 
     useEffect(() => {
         return () => {

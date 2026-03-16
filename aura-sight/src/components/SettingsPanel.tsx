@@ -11,6 +11,13 @@ interface ToggleProps {
     userId?: string;
 }
 
+interface AccessibilityPreferences {
+    voice_speed_fast?: boolean;
+    haptic_enabled?: boolean;
+    high_contrast_enabled?: boolean;
+    verbose_mode?: boolean;
+}
+
 const OversizedToggle = ({ label, description, field, initialChecked = false, userId }: ToggleProps) => {
     const [checked, setChecked] = useState(initialChecked);
     const [isSaving, setIsSaving] = useState(false);
@@ -65,7 +72,7 @@ export interface SettingsPanelProps {
 }
 
 export const SettingsPanel: React.FC<SettingsPanelProps> = ({ onClose }) => {
-    const [preferences, setPreferences] = useState<any>(null);
+    const [preferences, setPreferences] = useState<AccessibilityPreferences | null>(null);
     const [userId, setUserId] = useState<string | null>(null);
 
     useEffect(() => {

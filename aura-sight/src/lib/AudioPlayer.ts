@@ -11,8 +11,9 @@ export class AudioPlayer {
     private static readonly SAMPLE_RATE = 24000;
 
     constructor() {
-        this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({
-            sampleRate: AudioPlayer.SAMPLE_RATE
+        const AudioContextCtor = getAudioContextConstructor();
+        this.audioContext = new AudioContextCtor({
+            sampleRate: AudioPlayer.SAMPLE_RATE,
         });
         this.initPanner();
     }
@@ -108,8 +109,9 @@ export class AudioPlayer {
         if (this.audioContext && this.audioContext.state !== 'closed') {
             this.audioContext.close();
         }
-        this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({
-            sampleRate: AudioPlayer.SAMPLE_RATE
+        const AudioContextCtor = getAudioContextConstructor();
+        this.audioContext = new AudioContextCtor({
+            sampleRate: AudioPlayer.SAMPLE_RATE,
         });
         this.initPanner();
         this.nextStartTime = 0;
@@ -121,4 +123,16 @@ export class AudioPlayer {
     stop() {
         this.nextStartTime = 0;
     }
+}
+
+type AudioContextWindow = Window & {
+    webkitAudioContext?: typeof AudioContext;
+};
+
+function getAudioContextConstructor(): typeof AudioContext {
+    const ctor = window.AudioContext || (window as AudioContextWindow).webkitAudioContext;
+    if (!ctor) {
+        throw new Error('AudioContext is not supported in this browser.');
+    }
+    return ctor;
 }
