@@ -96,6 +96,9 @@ function App() {
     if (!apiClient.current) apiClient.current = new LiveAPIClient()
 
     try {
+      if (apiClient.current?.isConnected) {
+        apiClient.current.disconnect();
+      }
       await mediaManager.current.initialize()
     } catch (err) {
       updateStatus('error')
@@ -147,6 +150,8 @@ function App() {
       apiClient.current!.onAudio(() => {});
       apiClient.current!.onTurnComplete(() => {});
       apiClient.current!.onDisconnect(() => {});
+      apiClient.current!.onReconnecting(() => {});
+      apiClient.current!.onReconnected(() => {});
 
       apiClient.current!.onContent((text) => {
         setDirectorMessage(text)
@@ -192,8 +197,9 @@ function App() {
       });
 
       apiClient.current!.onReconnected(() => {
-        updateStatus('idle');
-        setDirectorMessage('Connected');
+        updateStatus('watching');
+        setDirectorMessage('Observing...');
+        if ('vibrate' in navigator) navigator.vibrate([40, 40, 40]);
       });
 
       // Auth via Supabase

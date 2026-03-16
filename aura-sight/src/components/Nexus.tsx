@@ -37,8 +37,8 @@ export const Nexus: React.FC<NexusProps> = ({
     const isEngaged = status !== 'idle';
 
     const startPress = () => {
-        // If in recording/responding/watching/thinking/error state, a tap means COMMIT / STOP
-        if (status === 'responding' || status === 'watching' || status === 'thinking' || status === 'error' || status === 'recording') {
+        // If in recording/responding/watching/thinking/reconnecting/error state, a tap means COMMIT / STOP
+        if (status === 'responding' || status === 'watching' || status === 'thinking' || status === 'error' || status === 'recording' || status === 'reconnecting') {
             if ('vibrate' in navigator) navigator.vibrate([40, 20, 40]);
             onStopRecording();
             return;

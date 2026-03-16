@@ -28,6 +28,7 @@ export class LiveAPIClient {
     // Reconnection state
     private reconnectAttempts: number = 0;
     private shouldReconnect: boolean = true;
+    private reconnectTimer: number | null = null;
 
     constructor() {
         const protocol = API_BASE_URL.includes('localhost') ? 'http' : 'https';
@@ -134,7 +135,15 @@ DIRECT INTENT PROTOCOL:
         const delay = Math.min(30000, 1000 * Math.pow(2, this.reconnectAttempts));
         console.log(`LiveAPIClient: Reconnecting in ${delay}ms...`);
         this.onReconnectingHandler(this.reconnectAttempts);
-        await new Promise(r => setTimeout(r, delay));
+        
+        await new Promise<void>(resolve => {
+            this.reconnectTimer = window.setTimeout(() => {
+                this.reconnectTimer = null;
+                resolve();
+            }, delay);
+        });
+
+        if (!this.shouldReconnect) return;
         try {
             await this.connect();
             this.onReconnectedHandler();
@@ -268,6 +277,10 @@ DIRECT INTENT PROTOCOL:
 
     disconnect() {
         this.shouldReconnect = false;
+        if (this.reconnectTimer) {
+            clearTimeout(this.reconnectTimer);
+            this.reconnectTimer = null;
+        }
         if (this.session) this.session.close();
         this.isConnected = false;
     }
