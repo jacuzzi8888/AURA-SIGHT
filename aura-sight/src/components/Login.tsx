@@ -11,10 +11,7 @@ export const Login: React.FC = () => {
         setLoading(true);
         setMessage('');
 
-        // Provide immediate audio feedback
-        const synth = window.speechSynthesis;
-        const utterance = new SpeechSynthesisUtterance("Sending login link");
-        synth.speak(utterance);
+        // Progress state handled via loading state
 
         const { error } = await supabase.auth.signInWithOtp({
             email,
@@ -26,10 +23,8 @@ export const Login: React.FC = () => {
 
         if (error) {
             setMessage(`Error: ${error.message}`);
-            synth.speak(new SpeechSynthesisUtterance("Login failed. Check your email address."));
         } else {
             setMessage('Check your email for the login link!');
-            synth.speak(new SpeechSynthesisUtterance("Link sent. Please check your email inbox."));
         }
         setLoading(false);
     };
@@ -38,8 +33,7 @@ export const Login: React.FC = () => {
         setLoading(true);
         setMessage('');
 
-        const synth = window.speechSynthesis;
-        synth.speak(new SpeechSynthesisUtterance("Connecting to Google"));
+        // Redirecting to Google OAuth
 
         const { error } = await supabase.auth.signInWithOAuth({
             provider: 'google',
@@ -50,7 +44,6 @@ export const Login: React.FC = () => {
 
         if (error) {
             setMessage(`Google login error: ${error.message}`);
-            synth.speak(new SpeechSynthesisUtterance("Google login failed."));
             setLoading(false);
         }
     };
