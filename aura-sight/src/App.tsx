@@ -19,7 +19,7 @@ function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
-export type AuraStatus = 'idle' | 'recording' | 'thinking' | 'responding' | 'listening' | 'watching' | 'error' | 'reconnecting'
+export type AuraStatus = 'idle' | 'recording' | 'thinking' | 'responding' | 'watching' | 'error' | 'reconnecting'
 type ViewMode = 'nexus' | 'settings' | 'loading'
 
 function App() {
@@ -299,11 +299,6 @@ function App() {
     }
   }, [cameraEnabled])
 
-  const releaseRecording = useCallback(() => {
-    updateStatus('watching')
-    setDirectorMessage('Observing...')
-  }, [])
-
   if (isLoadingSession) {
     return (
         <div className="flex h-[100dvh] w-full items-center justify-center bg-aura-dark text-aura-light">
@@ -357,12 +352,10 @@ function App() {
               status={status}
               directorMessage={directorMessage}
               onStartRecording={startRecording}
-              onReleaseRecording={releaseRecording}
               onStopRecording={stopRecording}
               onCancel={cancelSession}
               videoStream={videoStream}
               cameraEnabled={cameraEnabled}
-              isHandsFree={false}
             />
           </>
         ) : (

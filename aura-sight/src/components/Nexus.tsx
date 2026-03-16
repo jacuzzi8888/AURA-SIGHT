@@ -11,12 +11,10 @@ export interface NexusProps {
     readonly status: AuraStatus;
     readonly directorMessage: string | null;
     readonly onStartRecording: () => void;
-    readonly onReleaseRecording: () => void;
     readonly onStopRecording: () => void;
     readonly onCancel: () => void;
     readonly videoStream?: MediaStream | null;
     readonly cameraEnabled?: boolean;
-    readonly isHandsFree?: boolean; // Kept for prop compatibility but will be forced to false
     readonly className?: string;
 }
 
@@ -28,7 +26,6 @@ export const Nexus: React.FC<NexusProps> = ({
     onCancel,
     videoStream,
     cameraEnabled = true,
-    isHandsFree = false,
     className = '',
 }) => {
     const videoRef = useRef<HTMLVideoElement>(null);
@@ -87,7 +84,7 @@ export const Nexus: React.FC<NexusProps> = ({
     const endPress = () => {
         // If we were recording and release the hold, we transition to 'Watching'
         if (status === 'recording') {
-            onReleaseRecording();
+            onStopRecording();
             return;
         }
 
@@ -201,7 +198,6 @@ export const Nexus: React.FC<NexusProps> = ({
                         status === 'recording' && "bg-red-500/80 scale-100 border-none shadow-[0_0_80px_rgba(239,68,68,0.5)] animate-pulse",
                         status === 'thinking' && "scale-100 border-none shadow-[0_0_60px_rgba(245,158,11,0.4)]",
                         status === 'responding' && "bg-aura-primary scale-100 border-none shadow-[0_0_80px_rgba(19,127,236,0.6)]",
-                        status === 'listening' && "bg-aura-amber scale-100 border-none shadow-[0_0_80px_rgba(245,158,11,0.6)] animate-pulse",
                         status === 'watching' && "bg-aura-dark scale-100 border-2 border-aura-cyan shadow-[0_0_80px_rgba(19,127,236,0.6)]",
                         status === 'error' && "bg-red-800/60 scale-100 border-none shadow-[0_0_40px_rgba(239,68,68,0.3)]"
                     )}
@@ -232,7 +228,7 @@ export const Nexus: React.FC<NexusProps> = ({
                             )}
                             
                             {/* RED DOT: Active Listening Indicator (New 2026 Standard) */}
-                            {(status === 'recording' || status === 'listening' || status === 'watching' || status === 'reconnecting') && (
+                            {(status === 'recording' || status === 'watching' || status === 'reconnecting') && (
                                 <div className="absolute top-4 right-4 flex items-center gap-2 bg-black/40 backdrop-blur-sm px-2 py-1 rounded-full border border-white/10 z-50">
                                     <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse shadow-[0_0_10px_rgba(239,68,68,0.8)]" />
                                     <span className="text-[8px] font-bold text-white uppercase tracking-tighter">LIVE</span>

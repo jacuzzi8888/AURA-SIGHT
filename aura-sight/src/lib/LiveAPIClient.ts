@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenAI, Modality, Type } from '@google/genai';
 
 const PRODUCTION_PROXY_URL = 'aura-proxy-432140310963.us-central1.run.app';
 const API_BASE_URL = typeof window !== 'undefined' && window.location.hostname === 'localhost'
@@ -13,32 +13,23 @@ const API_BASE_URL = typeof window !== 'undefined' && window.location.hostname =
 export class LiveAPIClient {
     private session: any | null = null;
     private readonly baseUrl: string;
-    private readonly proxyHost: string;
-
     private onContentHandler: (text: string) => void = () => { };
     private onAudioHandler: (data: Int16Array) => void = () => { };
     private onDisconnectHandler: (reason: string) => void = () => { };
     private onInterruptedHandler: () => void = () => { };
-    private onGoAwayHandler: (timeLeft: number) => void = () => { };
     private onTurnCompleteHandler: () => void = () => { };
     private onTranscriptionHandler: (text: string) => void = () => { };
     private onReconnectingHandler: (attempt: number) => void = () => { };
     private onReconnectedHandler: () => void = () => { };
     
     public isConnected: boolean = false;
-    private isStable: boolean = false;
     private messageQueue: any[] = [];
 
     // Reconnection state
     private reconnectAttempts: number = 0;
-    private readonly maxReconnectAttempts: number = 15;
     private shouldReconnect: boolean = true;
 
-    // Session resumption
-    private resumptionToken: string | null = null;
-
     constructor() {
-        this.proxyHost = API_BASE_URL;
         const protocol = API_BASE_URL.includes('localhost') ? 'http' : 'https';
         this.baseUrl = `${protocol}://${API_BASE_URL}`;
     }
@@ -69,7 +60,7 @@ export class LiveAPIClient {
                 model: modelId,
                 config: {
                     generationConfig: {
-                        responseModalities: ["audio"],
+                        responseModalities: [Modality.AUDIO],
                     },
                     systemInstruction: {
                         parts: [{
@@ -85,8 +76,8 @@ Personality: Professional, concise, minimalist.`
                                     name: "add_allergy",
                                     description: "Adds a new allergy to the user's profile.",
                                     parameters: {
-                                        type: "object",
-                                        properties: { allergy: { type: "string" } },
+                                        type: Type.OBJECT,
+                                        properties: { allergy: { type: Type.STRING } },
                                         required: ["allergy"]
                                     }
                                 },
@@ -94,8 +85,8 @@ Personality: Professional, concise, minimalist.`
                                     name: "save_fact",
                                     description: "Saves a general fact about the user.",
                                     parameters: {
-                                        type: "object",
-                                        properties: { fact: { type: "string" } },
+                                        type: Type.OBJECT,
+                                        properties: { fact: { type: Type.STRING } },
                                         required: ["fact"]
                                     }
                                 }
@@ -107,7 +98,6 @@ Personality: Professional, concise, minimalist.`
                     onopen: () => {
                         console.log('LiveAPIClient: SDK Session Connected');
                         this.isConnected = true;
-                        this.isStable = true;
                         this.reconnectAttempts = 0;
                         this.flushMessageQueue();
                     },
@@ -135,7 +125,7 @@ Personality: Professional, concise, minimalist.`
     }
 
     private async attemptReconnect() {
-        if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+        if (this.reconnectAttempts >= 15) {
             this.onDisconnectHandler('Max reconnection attempts reached');
             return;
         }
@@ -196,12 +186,6 @@ Personality: Professional, concise, minimalist.`
         // Turn complete
         if (message.serverContent?.turnComplete) {
             this.onTurnCompleteHandler();
-        }
-
-        // Resumption Token
-        const token = message.sessionResumptionUpdate?.newHandle;
-        if (token) {
-            this.resumptionToken = token;
         }
     }
 
@@ -288,13 +272,12 @@ Personality: Professional, concise, minimalist.`
     }
 
     // Event registrations (keep same for API compatibility)
-    onContent(h: any) { this.onContentHandler = h; }
-    onAudio(h: any) { this.onAudioHandler = h; }
-    onDisconnect(h: any) { this.onDisconnectHandler = h; }
-    onInterrupted(h: any) { this.onInterruptedHandler = h; }
-    onGoAway(h: any) { this.onGoAwayHandler = h; }
-    onTurnComplete(h: any) { this.onTurnCompleteHandler = h; }
-    onTranscription(h: any) { this.onTranscriptionHandler = h; }
-    onReconnecting(h: any) { this.onReconnectingHandler = h; }
-    onReconnected(h: any) { this.onReconnectedHandler = h; }
+    onContent(h: (text: string) => void) { this.onContentHandler = h; }
+    onAudio(h: (data: Int16Array) => void) { this.onAudioHandler = h; }
+    onDisconnect(h: (reason: string) => void) { this.onDisconnectHandler = h; }
+    onInterrupted(h: () => void) { this.onInterruptedHandler = h; }
+    onTurnComplete(h: () => void) { this.onTurnCompleteHandler = h; }
+    onTranscription(h: (text: string) => void) { this.onTranscriptionHandler = h; }
+    onReconnecting(h: (attempt: number) => void) { this.onReconnectingHandler = h; }
+    onReconnected(h: () => void) { this.onReconnectedHandler = h; }
 }
