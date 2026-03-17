@@ -1,0 +1,3 @@
+## 2024-05-24 - Accessibility for Icon-only Buttons
+**Learning:** For a heavily accessibility-focused app like Aura Sight, it's particularly egregious to miss standard accessibility features like ARIA labels, titles, and focus states on interactive elements. Icon-only buttons without these features are invisible to screen readers and difficult to interact with via keyboard navigation, completely contradicting the application's core mission of aiding the visually impaired.
+**Action:** Always verify that every interactive element, especially icon-only buttons, includes `aria-label`, `title` (for tooltips), and explicit `focus-visible` styles to ensure it is both screen-reader accessible and keyboard navigable.
