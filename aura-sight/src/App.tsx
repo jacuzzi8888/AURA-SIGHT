@@ -71,19 +71,25 @@ function App() {
               <div className="flex items-center gap-4">
                 <button
                   onClick={toggleCamera}
-                  className="p-3 text-slate-300 hover:text-white transition-colors"
+                  className="p-3 text-slate-300 hover:text-white transition-colors focus-visible:ring-2 focus-visible:ring-aura-cyan focus:outline-none rounded-full"
+                  aria-label={cameraEnabled ? "Turn off camera" : "Turn on camera"}
+                  title={cameraEnabled ? "Turn off camera" : "Turn on camera"}
                 >
                   {cameraEnabled ? <Video className="w-6 h-6" /> : <VideoOff className="w-6 h-6 text-red-400" />}
                 </button>
                 <button
                   onClick={cycleCamera}
-                  className="p-3 text-aura-cyan hover:text-white transition-all active:rotate-180"
+                  className="p-3 text-aura-cyan hover:text-white transition-all active:rotate-180 focus-visible:ring-2 focus-visible:ring-aura-cyan focus:outline-none rounded-full"
+                  aria-label="Switch camera"
+                  title="Switch camera"
                 >
                   <Eye className="w-7 h-7" />
                 </button>
                 <button
                   onClick={() => setActiveView('settings')}
-                  className="p-3 text-slate-300 hover:text-white transition-colors"
+                  className="p-3 text-slate-300 hover:text-white transition-colors focus-visible:ring-2 focus-visible:ring-aura-cyan focus:outline-none rounded-full"
+                  aria-label="Open settings"
+                  title="Open settings"
                 >
                   <Settings className="w-6 h-6" />
                 </button>

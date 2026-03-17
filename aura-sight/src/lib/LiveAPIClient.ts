@@ -187,7 +187,7 @@ ONE-SHOT DIRECT INTENT PROTOCOL:
                         this.reconnectAttempts = 0;
                         this.flushMessageQueue();
                     },
-                    onmessage: (msg: any) => {
+                    onmessage: (msg: unknown) => {
                         this.handleServerMessage(msg as LiveServerMessage);
                     },
                     onclose: (event: CloseEventLike) => {
